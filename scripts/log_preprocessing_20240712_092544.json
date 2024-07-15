@@ -1,0 +1,85 @@
+{
+    "recording": [
+        {
+            "recording_path": [
+                "D:\\",
+                "M21",
+                "2024-04-21_16-51-50",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "D:\\",
+                "M21",
+                "2024-04-21_16-51-50",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "D:\\",
+                        "M21",
+                        "2024-04-21_16-51-50",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeA-LFP",
+                    "path": [
+                        "D:\\",
+                        "M21",
+                        "2024-04-21_16-51-50",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-LFP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "D:\\",
+                        "M21",
+                        "2024-04-21_16-51-50",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-LFP",
+                    "path": [
+                        "D:\\",
+                        "M21",
+                        "2024-04-21_16-51-50",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-LFP"
+                    ]
+                },
+                {
+                    "stream_name": "USB-6212 (BNC)",
+                    "path": [
+                        "D:\\",
+                        "M21",
+                        "2024-04-21_16-51-50",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_USB-6212 (BNC)"
+                    ]
+                }
+            ]
+        }
+    ]
+}

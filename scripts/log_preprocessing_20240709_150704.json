@@ -1,0 +1,298 @@
+{
+    "recording": [
+        {
+            "recording_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                }
+            ]
+        },
+        {
+            "recording_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                }
+            ]
+        },
+        {
+            "recording_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                }
+            ]
+        },
+        {
+            "recording_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                }
+            ]
+        },
+        {
+            "recording_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                }
+            ]
+        },
+        {
+            "recording_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1"
+            ],
+            "SynchData_path": [
+                "E:\\",
+                "Luigi_ephys",
+                "M24",
+                "2024-04-24_10-00-55",
+                "Record Node 103",
+                "experiment1",
+                "recording1",
+                "SynchData"
+            ],
+            "SpikeData": [
+                {
+                    "stream_name": "ProbeA-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeA-AP"
+                    ]
+                },
+                {
+                    "stream_name": "ProbeB-AP",
+                    "path": [
+                        "E:\\",
+                        "Luigi_ephys",
+                        "M24",
+                        "2024-04-24_10-00-55",
+                        "Record Node 103",
+                        "experiment1",
+                        "recording1",
+                        "SpikeData_ProbeB-AP"
+                    ]
+                }
+            ]
+        }
+    ]
+}
