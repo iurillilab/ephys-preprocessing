@@ -7,9 +7,18 @@ from pathlib import Path
 import numpy as np
 import time
 import os
-from kilosort import io, run_kilosort
+try:
+    from kilosort import io, run_kilosort
+except ImportError:
+    print("Kilosort not installed")
+    pass
 import json
-import torch
+try:
+    import torch
+except ImportError:
+    print("Torch not installed")
+    torch = None
+    pass
 
 import spikeinterface.sorters as ss
 
@@ -88,7 +97,6 @@ def call_ks(preprocessed_recording, stream_name, working_folder_path, callKSfrom
     
     probe = preprocessed_recording.get_probe()
 
-
     if callKSfromSI: #takes forever even with latest spikeinterface version. stopped it.
         # call kilosort from here, without saving the .bin (will have to call something else to run phy)
         print("Starting KS4")
@@ -111,8 +119,12 @@ def call_ks(preprocessed_recording, stream_name, working_folder_path, callKSfrom
         #run KS programmatically
         settings = {'fs': fs, 'n_chan_bin': probe.get_contact_count()}
         probe_dict = io.load_probe(probe_path)
+        kilosort_optional_params = {}
+        if torch is not None:
+            kilosort_optional_params["device"] = torch.device("cuda")
+
         ops, st_ks, clu, tF, Wall, similar_templates, is_ref, est_contam_rate, kept_spikes = run_kilosort(
-                            settings=settings, probe=probe_dict, filename=filename, data_dtype=DTYPE, device=torch.device("cuda") 
+                            settings=settings, probe=probe_dict, filename=filename, data_dtype=DTYPE, **kilosort_optional_params
         )
 
         # decide whether you want to delete data.bin afterwards
