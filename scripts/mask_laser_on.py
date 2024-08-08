@@ -1,90 +1,53 @@
 # %%
 
-data_path_list = ["/Volumes/Extreme SSD/P02_MPAOPTO_LP/e04_ephys-contrapag-stim/v01/M22/2024-04-23_10-39-40"]
+data_path_list = [r"E:\P02_MPAOPTO_LP\e04_ephys-contrapag-stim\v01\M21",
+                  r"F:\Luigi\M19_D558\20240419\133356\NpxData"]
 run_barcodeSync = False
 run_preprocessing = True # run preprocessing and spikesorting
 callKSfromSI = False
 
 # %%
-%matplotlib widget
+# %matplotlib widget
 from matplotlib import pyplot as plt
 import spikeinterface.extractors as se
-import spikeinterface.widgets as sw
 import spikeinterface.preprocessing as st
 
-from spikeinterface import get_noise_levels, aggregate_channels
 from pathlib import Path
-import os
 import numpy as np
 
 from preprocessing_utils import *
 from nwb_conv.oephys import OEPhysDataFolder
+from datetime import datetime
+
+timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-# %%
-data_path = data_path_list[0]
-# data_path = "/Users/vigji/Desktop/test_mpa_dir/P02_MPAOPTO_LP/e05_doubleservoarm-ephys-pagfiber/v01/M20_D545/20240424/154810"
-oephys_data = OEPhysDataFolder(data_path)
+data_path = Path(data_path_list[0])
+
+oephys_data = OEPhysDataFolder(data_path)  # custom class to simplify parsing of info from oephys data folder
 
 all_stream_names, ap_stream_names = oephys_data.stream_names, oephys_data.ap_stream_names
 
-# %%
-npx_barcode = oephys_data.reference_npx_barcode
-nidaq_data = oephys_data.nidaq_recording
+for current_stream in ap_stream_names:
+    # standard preprocessing pipeline:
 
-nidaq_barcode = nidaq_data.barcode
-laser_data = nidaq_data.continuous_signals["laser-log"]
+    oephys_extractor = se.read_openephys(oephys_data.path, stream_name=current_stream)
 
-reader = se.read_openephys(oephys_data.path, stream_name=oephys_data.ap_stream_names[0])
+    # read laser onsets in NPX indexing from oephys data (takes care of barcode alignment internally):
+    laser_onset_idxs = find_laser_onsets_npx_idxs(oephys_data, current_stream)
+    zeroed_extractor = st.RemoveArtifactsRecording(oephys_extractor, laser_onset_idxs, ms_after=11)
 
-laser_idxs = nidaq_barcode.transform_idxs_to(npx_barcode, laser_data.onsets).astype(int)
-laser_idxs
+    preprocessed_extractor = standard_preprocessing(zeroed_extractor)
+    # alternative: zero later:
+    # preprocessed_extractor = st.RemoveArtifactsRecording(oephys_extractor, laser_onset_idxs, ms_after=12)
 
-# %%
-chan_idx = 200
-trace = reader.get_traces(channel_ids=[reader.get_channel_ids()[chan_idx]])
-laser_idx
-len(trace)
-# %%
-n_to_take = 200
-skip = len(laser_idxs) // n_to_take
-pre_int_sec = 0.05
-post_int_sec = 0.05
-fs = reader.sampling_frequency
-pre_int = int(pre_int_sec * fs)
-post_int = int(post_int_sec * fs)
+    # Debugging plots:
+    figures_folder = data_path / f"ephys_processing_figs_{timestamp}" / current_stream
+    figures_folder.mkdir(exist_ok=True, parents=True)
 
-cropped = np.zeros((len(laser_idxs[::skip]), pre_int + post_int))
+    make_probe_plots(oephys_extractor, preprocessed_extractor, figures_folder, current_stream)
+    plot_raw_and_preprocessed(oephys_extractor, preprocessed_extractor, saving_path=figures_folder / f"snippets_{current_stream}.pdf")
 
-for i, laser_idx in enumerate(laser_idxs[::skip]):
-    cropped[i, :] = np.array(trace[laser_idx - pre_int:laser_idx + post_int]).flat
-
-cropped.shape
-plt.figure()
-plt.imshow(cropped, cmap="RdBu_r", aspect="auto", vmin=-1000, vmax=1000)
-plt.axvline(pre_int, color="k")
-
-
-# %%
-zeroed = st.RemoveArtifactsRecording(reader, laser_idxs, ms_after=12)
-# %%
-# zeroed_trace = zeroed.get_traces(channel_ids=[reader.get_channel_ids()[chan_idx]])
-cropped = np.zeros((len(laser_idxs[::skip]), pre_int + post_int))
-for i, laser_idx in enumerate(laser_idxs[::skip]):
-    trace = zeroed.get_traces(start_frame=laser_idx - pre_int, 
-                              end_frame=laser_idx + post_int,
-                              channel_ids=[reader.get_channel_ids()[chan_idx]])
-    trace = np.array(trace).flat
-    trace = trace - np.mean(trace)
-    cropped[i, :] = trace
-    
-
-cropped.shape
-plt.figure()
-# plt.plot(cropped, cmap="RdBu_r", aspect="auto", vmin=-1000, vmax=1000)
-plt.plot(cropped.T)
-plt.axvline(pre_int, color="k")
-
-# %%
-?zeroed.get_traces
+    show_laser_trigger_preprost(oephys_extractor, preprocessed_extractor, laser_onset_idxs, 
+                                    n_to_take=200)
 # %%
