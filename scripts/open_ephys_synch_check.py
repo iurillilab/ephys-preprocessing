@@ -17,13 +17,21 @@ time_npx2 = recording_npx2.get_times()
 time_daq = recording_daq.get_times()
 
 # Read traces:
-start_time = time.time()
-trace_npx2 = np.array(recording_npx2.get_traces(channel_ids=recording_npx2.channel_ids[:1]))
-trace_daq = np.array(recording_daq.get_traces(channel_ids=recording_daq.channel_ids[1:]))
+start_time = 1500
+end_time = start_time + 1
+trace_npx2 = np.array(recording_npx2.get_traces(start_frame=start_time*recording_npx2.get_sampling_frequency(),
+                                                end_frame=end_time*recording_npx2.get_sampling_frequency(),
+                                                channel_ids=recording_npx2.channel_ids[:1]))
+trace_daq = np.array(recording_daq.get_traces(start_frame=start_time*recording_daq.get_sampling_frequency(),
+                                                end_frame=end_time*recording_daq.get_sampling_frequency(),
+                                                channel_ids=recording_daq.channel_ids[1:]))
 print(f"Time taken to load traces: {time.time() - start_time:.2f} seconds")
 
 # %%
-plt.plot(time_npx2, trace_npx2, label="npx2")
-plt.plot(time_daq, trace_daq, label="daq")
+plt.figure(figsize=(10, 5))
+plt.plot(time_npx2[int(start_time*recording_npx2.get_sampling_frequency()):int(end_time*recording_npx2.get_sampling_frequency())], 
+         trace_npx2, label="npx2")
+plt.plot(time_daq[int(start_time*recording_daq.get_sampling_frequency()):int(end_time*recording_daq.get_sampling_frequency())], 
+         trace_daq, label="daq")
 plt.legend()
 # %%
