@@ -76,7 +76,7 @@ plt.plot(laser_array[:, 0], laser_array[:, 1], 'o', label='laser')
 # plt.plot(np.diff(clock_array[:, 0]), 'o', label='clock')
 # plt.plot(laser_array[:, 0], laser_array[:, 1], 'o', label='laser')
 # %%
-evts_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-mpm-rig_synch_test/long/2024-11-13_14-39-11/Record Node 111/experiment1/recording3/events/NI-DAQmx-112.PXIe-6341/TTL")
+evts_path = recording_path  / "Record Node 111/experiment1/recording3/events/NI-DAQmx-112.PXIe-6341/TTL"
 
 full_words = np.load(evts_path / "full_words.npy")
 sample_numbers = np.load(evts_path / "sample_numbers.npy")
