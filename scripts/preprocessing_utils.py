@@ -20,6 +20,12 @@ except ImportError:
     torch = None
     pass
 
+try:
+    from nwb_conv.oephys import OEPhysDataFolder
+except ImportError:
+    print("nwb-conv not installed")
+    pass
+
 import spikeinterface.sorters as ss
 
 
@@ -83,9 +89,12 @@ def standard_preprocessing(recording_extractor):
     recording = recording.remove_channels(remove_channel_ids=bad_channel_ids)  # could be interpolated instead, but why?
 
     # split in groups and apply spatial filtering, then reaggregate. KS4 can now handle multiple shanks
-    grouped_recordings = recording.split_by(property='group')
-    recgrouplist_hpsf = [st.highpass_spatial_filter(recording=grouped_recordings[k]) for k in grouped_recordings.keys()]  # cmr is slightly faster. results are similar
-    recording_hpsf = si.aggregate_channels(recgrouplist_hpsf)
+    if len(recording.get_probes()) > 1:
+        grouped_recordings = recording.split_by(property='group')
+        recgrouplist_hpsf = [st.highpass_spatial_filter(recording=grouped_recordings[k]) for k in grouped_recordings.keys()]  # cmr is slightly faster. results are similar
+        recording_hpsf = si.aggregate_channels(recgrouplist_hpsf)
+    else:
+        recording_hpsf = st.highpass_spatial_filter(recording=recording)
 
     return recording_hpsf
 
@@ -131,3 +140,154 @@ def call_ks(preprocessed_recording, stream_name, working_folder_path, callKSfrom
         bin_path = working_folder_path / 'data.bin'
         if bin_path.exists() and remove_binary:
             bin_path.unlink()
+
+
+def find_laser_onsets_npx_idxs(oephys_data: OEPhysDataFolder, channel_name: str):
+    """Find indexes of laser ON from OEPhysDataFolder object with NIDAQX recording.
+    Assumes existence of a channel named laser-log.
+    """
+
+    # TODO: This shold be read from metadata in the future:
+    oephys_data.nidaq_channel_map = {0: "frames-log", 
+                                    1: "laser-log", 
+                                    2: "-", 
+                                    3: "motor-log", 
+                                    4: "barcode", 
+                                    5: "-", 
+                                    6: "-", 
+                                    7: "-"}
+    
+    npx_barcode = oephys_data.load_channel_barcode(channel_name)
+
+    nidaq_data = oephys_data.nidaq_recording
+
+    nidaq_barcode = nidaq_data.barcode
+    laser_data = nidaq_data.continuous_signals["laser-log"]
+
+    return nidaq_barcode.transform_idxs_to(npx_barcode, laser_data.onsets).astype(int)
+
+
+# additional plots for snippets of trace:
+def plot_snippets(data_interface, n_snippets=4, padding_s=30, snippet_length_s=0.04, axs=None, additional_info=None,
+                  vmax=None):
+    """
+    Plot snippets of traces from the recording to check for drifts, artifacts, etc.
+    Parameters
+    ----------
+    data_interface : RecordingExtractor
+        Recording extractor.
+    n_snippets : int
+        Number of snippets to plot.
+    padding_s : float
+        Padding at beginning and end of recording to avoid edge effects.
+    snippet_length_s : float
+        Length of each snippet in seconds.
+    """
+    DEFAULT_WIDTH = 3.5
+    DEFAULT_HEIGHT = 5
+
+    snippet_length = int(snippet_length_s * data_interface.sampling_frequency)
+
+    # intersperse snippets sampling beginning, middle and end of recording:
+    snippet_start_s = np.linspace(padding_s, data_interface.get_total_duration() - padding_s, n_snippets)
+    snippet_start_idxs = (snippet_start_s * data_interface.sampling_frequency).astype(int)
+
+    if axs is None:
+        fig, axs = plt.subplots(1, n_snippets, figsize=(DEFAULT_WIDTH* n_snippets, DEFAULT_HEIGHT), 
+                                sharey=True, gridspec_kw={'wspace': 0.1})
+    else:
+        fig = axs[0].figure
+    
+    chan_ids = data_interface.get_channel_ids()
+    for i, idx in   enumerate(snippet_start_idxs):
+        snippet = data_interface.get_traces(start_frame=idx, end_frame=idx + snippet_length)
+        if i == 0 and vmax is None:
+            vmax = np.percentile(np.abs(snippet), 99)
+
+        axs[i].imshow(snippet.T, aspect="auto", cmap="RdBu_r", vmin=-vmax, vmax=vmax, origin="upper",
+                    extent=[0, snippet_length_s*1000, chan_ids[-1], chan_ids[0]])
+        axs[i].set(xlabel="Time (ms)")
+        if i == 0:
+            axs[i].set(ylabel="Channel" if additional_info is None else additional_info + "\n\nChannel")
+        else:
+            axs[i].set(yticklabels=[])
+            
+        axs[i].set_title(f"t={snippet_start_s[i]:.1f} s", fontsize=10)
+
+    # add small axis for cmap deriving its position from the last subplot location on the figure:
+    cax = fig.add_axes([axs[-1].get_position().x1 + 0.01, axs[-1].get_position().y0, 
+                        axs[-1].get_position().width*0.05, axs[-1].get_position().height / 5])
+    plt.colorbar(axs[-1].images[0], cax=cax)
+    
+    return axs
+
+
+def plot_raw_and_preprocessed(raw_extractor, preprocessed_extractor, n_snippets=4, padding_s=30, snippet_length_s=0.04,
+                              saving_path=None, v_maxs=(100, 50)):
+    """
+    Plot snippets of trace and preprocessed trace from the recording to check for drifts, artifacts, etc.
+    Parameters
+    ----------
+    raw_extractor : RecordingExtractor
+        Raw recording extractor.
+    preprocessed_extractor : RecordingExtractor
+        Preprocessed recording extractor.
+    n_snippets : int
+        Number of snippets to plot.
+    padding_s : float
+        Padding at beginning and end of recording to avoid edge effects.
+    snippet_length_s : float
+        Length of each snippet in seconds.
+    """
+
+
+    fig, all_axs = plt.subplots(2, n_snippets, figsize=(3.5 * n_snippets, 10), sharex=True, 
+                            gridspec_kw={'wspace': 0.1, 'hspace': 0.3})
+    
+    for ax, data, info, vmax in zip(all_axs, 
+                                    [raw_extractor, preprocessed_extractor], 
+                                    [f"Raw ({raw_extractor.stream_name})", "Preprocessed"], 
+                                    v_maxs):
+        plot_snippets(data, n_snippets=n_snippets, padding_s=padding_s, snippet_length_s=snippet_length_s, 
+                      axs=ax, additional_info=info, vmax=vmax)
+        
+    if saving_path is not None:
+        plt.savefig(saving_path, dpi=300)
+
+
+def show_laser_triggered(oe_extractor, laser_onset_idxs, n_to_take=100, padding_s=0.05, channel_idx=150, v_maxs=100, ax=None):
+    """Visualize laser-triggered snippets for a given channel, to test correct artefact zeroing.
+    """
+    fs = oe_extractor.sampling_frequency
+
+    skip = len(laser_onset_idxs) // n_to_take
+    pre_int = int(padding_s * fs)
+    post_int = int(padding_s * fs)
+
+    sel_laser_onset_idxs = laser_onset_idxs[::skip]  # take every n-th laser onset for visualization
+    cropped = np.zeros((len(sel_laser_onset_idxs), pre_int + post_int))
+
+    for i, laser_idx in enumerate(sel_laser_onset_idxs):
+        cropped[i, :] = oe_extractor.get_traces(start_frame = laser_idx - pre_int, end_frame = laser_idx + post_int, 
+                                                channel_ids=[oe_extractor.get_channel_ids()[channel_idx]]).flat
+        cropped[i, :] = cropped[i, :] - np.mean(cropped[i, :])
+    
+    if ax is None:
+        f, ax = plt.subplots()
+    ax.imshow(cropped, cmap="RdBu_r", aspect="auto", vmin=-v_maxs, vmax=v_maxs)
+    ax.axvline(pre_int, color="green", lw=2)
+
+
+def show_laser_trigger_preprost(raw_extractor, preprocessed_extractor, laser_onset_idxs, 
+                                n_to_take=100, padding_s=0.05, channel_idx=150, v_maxs=(100, 50), saving_path=None):
+    """Visualize laser-triggered snippets for a given channel, to test correct artefact zeroing."""
+    f, ax = plt.subplots(1, 2, figsize=(10, 5))
+    
+    show_laser_triggered(raw_extractor, laser_onset_idxs, n_to_take, padding_s, channel_idx, v_maxs[0], ax=ax[0])
+    ax[0].set_title("Raw data")
+    
+    show_laser_triggered(preprocessed_extractor, laser_onset_idxs, n_to_take, padding_s, channel_idx, v_maxs[1], ax=ax[1])
+    ax[1].set_title("Preprocessed data")
+
+    if saving_path is not None:
+        f.savefig(saving_path)
