@@ -10,9 +10,10 @@ from nwb_conv.oephys import OEPhysDataFolder
 # %%
 # Path to a valid OpenEphys recording:
 main_dir = Path("/Users/vigji/Desktop/noise_tests")
+date = "20241115"
 
 def _get_recording(setup, probe_combination, probe_name):
-    setup = main_dir / setup
+    setup = main_dir / setup / date
     probe_dir = setup / f"{probe_combination}_test_noise"
     recording_path = next(probe_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"))
     rec_folder = OEPhysDataFolder(recording_path)
@@ -27,9 +28,18 @@ def get_recording_noise_levels(setup, probe_combination, probe_name, method="std
     return get_noise_levels(recording, method=method)
 
 # %%
-noise_levs1 = get_recording_noise_levels("mpm-rig", "NPX1", "ProbeA")
-noise_levs2 = get_recording_noise_levels("mpm-rig", "NPX1-NPX2", "ProbeA")
-# %%
+# noise_levs1 = get_recording_noise_levels("mpm-rig", "NPX1", "ProbeA")
+# noise_levs2 = get_recording_noise_levels("mpm-rig", "NPX1-NPX2", "ProbeA")
+
+# room1 vs room2
+# noise_levs1 = get_recording_noise_levels("mpm-rig", "NPX1", "ProbeA")
+# noise_levs2 = get_recording_noise_levels("ephysroom-rig", "NPX1", "ProbeA")
+
+noise_levs1 = get_recording_noise_levels("ephysroom-rig", "NPX1", "ProbeA")
+noise_levs2 = get_recording_noise_levels("ephysroom-rig", "NPX1-NPX2", "ProbeA")
+
+
+
 
 f, ax = plt.subplots(figsize=(3, 3))
 ax.scatter(noise_levs1, noise_levs2, s=10, alpha=0.5, lw=0)
