@@ -1,5 +1,4 @@
 # %%
-
 # %matplotlib widget
 import spikeinterface.extractors as se
 from spikeinterface.core import get_noise_levels
@@ -7,11 +6,24 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from nwb_conv.oephys import OEPhysDataFolder
 # %%
 # Path to a valid OpenEphys recording:
-recording_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-mpm_rig-testing/20241114/noise_testing/only_probe_a/2024-11-14_15-16-52")
-# recording_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-mpm_rig-testing/20241114/noise_testing/both/2024-11-14_15-25-39")
+main_dir = Path("/Users/vigji/Desktop/noise_tests")
 
+def _get_recording(main_dir, setup, probe_combination, probe_name):
+    setup = main_dir / setup
+    probe_dir = setup / f"{probe_combination}_test_noise"
+    recording_path = next(probe_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"))
+    rec_folder = OEPhysDataFolder(recording_path)
+    # print(rec_folder.reference_stream_name)
+    probe_stream_name = [stream for stream in rec_folder.stream_names if probe_name in stream][0]
+    # print(probe_stream_name)
+    recording = se.read_openephys(recording_path, stream_name=probe_stream_name)
+    return recording
+
+recording = _get_recording(main_dir, "mpm-rig", "NPX1", "ProbeA")
+# %%
 print(recording_path.exists())
 # To read the recording, we need to look in the folder the name of the record node
 # and the streams that we want to read. The full stream name is "Record Node XXX#stream name"
