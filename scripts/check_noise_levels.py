@@ -13,10 +13,10 @@ import ocplot as ocp
 # %%
 # Path to a valid OpenEphys recording:
 # main_dir = Path("/Users/vigji/Desktop/noise_tests")
-main_dir = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-rigs-tests")
+# main_dir = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-rigs-tests")
+main_dir = Path("/Volumes/Extreme SSD/ephys-rigs-tests")
 assert main_dir.exists(), "main_dir does not exist, check path"
 date = "20241115"
-
 
 def get_recording(setup, probe_combination, probe_name):
     setup = main_dir / setup / date
@@ -35,16 +35,6 @@ def get_recording_noise_levels(setup, probe_combination, probe_name, method="std
     return get_noise_levels(recording, method=method)
 
 
-# %%
-setup1, key1 = "mpm-rig", "NPX1"
-setup2, key2 = "ephysroom-rig", "NPX1"
-rec1 = get_recording(setup1, key1, "ProbeA")
-rec2 = get_recording(setup2, key2, "ProbeA")
-# noise_levs1 = get_recording_noise_levels(setup1, key1, "ProbeB")
-# noise_levs2 = get_recording_noise_levels(setup2, key2, "ProbeA")
-
-# %%
-rec = rec2
 def get_trace_snippets(rec, sample_every_n_channels=1, snippet_length_ms=3000, 
                        n_snippets=5, offset_subtract=False, verbose=True):
     """Get random snippets of traces from recording, sampled across channels."""
@@ -114,7 +104,7 @@ def plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs, vlim
     ax_traces.set_ylabel("Channel")
 
     cbar_height = cbar_fract
-    cax_traces = ax_traces.inset_axes([1.02, 0.5-cbar_height/2, 0.02, cbar_height])
+    cax_traces = ax_traces.inset_axes([1.02, 0, 0.02, cbar_height])
     plt.colorbar(im_traces, cax=cax_traces, orientation='vertical', label="Voltage (uV)", ticks=[-vlim, 0, vlim])
 
     ####
@@ -139,7 +129,7 @@ def plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs, vlim
     ax_hist.set_ylabel("Channel")
     ax_hist.set_xticks(np.arange(-48, 51, 12))
 
-    cax_hist = ax_hist.inset_axes([1.02, 0.5-cbar_height/2, 0.02, cbar_height])
+    cax_hist = ax_hist.inset_axes([1.02, 0, 0.02, cbar_height])
     plt.colorbar(im_hist, cax=cax_hist, orientation='vertical', label="Density", ticks=[])
 
     ####
@@ -159,8 +149,60 @@ def plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs, vlim
     im_power = ax_power.imshow(np.log10(pxx).T, aspect="auto", origin="lower",
                               extent=(f[0], f[-1], 0, pxx.shape[1]))
     ax_power.set(xlabel="Frequency (Hz)")
-    cax_power = ax_power.inset_axes([1.02, 0.5-cbar_height/2, 0.02, cbar_height])
+    cax_power = ax_power.inset_axes([1.02, 0, 0.02, cbar_height])
     plt.colorbar(im_power, cax=cax_power, orientation='vertical', label="Log power", ticks=[])
+
+    return fig
+
+# Create figure comparing noise characteristics between recordings
+def plot_noise_comparison(data_summary, rec_name_1, rec_name_2, f, hist_bins):
+    """Plot comparison of noise characteristics between two recordings"""
+    fig = plt.figure(figsize=(8, 8))
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+
+    # Top left - noise level scatter
+    ax_scatter = fig.add_subplot(gs[0, 0])
+    noise_levs1 = data_summary[0]['noise_levs']
+    noise_levs2 = data_summary[1]['noise_levs']
+    ax_scatter.scatter(noise_levs1, noise_levs2, s=10, alpha=0.5, lw=0)
+    xlims = (0, max(np.max(noise_levs1), np.max(noise_levs2))*1.02)
+    ax_scatter.plot(*[[1, xlims[1]*0.9]]*2, "k--", lw=1)
+    ax_scatter.set_xlim(xlims)
+    ax_scatter.set_ylim(xlims)
+    ax_scatter.set_xlabel(rec_name_1)
+    ax_scatter.set_ylabel(rec_name_2)
+    ax_scatter.set_yticks(ax_scatter.get_xticks())
+    ocp.despine(ax_scatter)
+    # Top right - average power spectra
+    ax_power = fig.add_subplot(gs[0, 1])
+    ax_power.loglog(f, data_summary[0]['pxx'].mean(axis=1), label=rec_name_1)
+    ax_power.loglog(f, data_summary[1]['pxx'].mean(axis=1), label=rec_name_2)
+    ax_power.set_xlabel('Frequency (Hz)')
+    ax_power.set_ylabel('Mean power')
+    ocp.despine(ax_power)
+    ax_power.legend(frameon=False)
+
+    # Bottom left - mean density histograms
+    ax_hist = fig.add_subplot(gs[1, 0])
+    hist_means1 = data_summary[0]['hist_counts'].mean(axis=1)
+    hist_means2 = data_summary[1]['hist_counts'].mean(axis=1)
+    ax_hist.plot(hist_bins[:-1], hist_means1, label=rec_name_1)
+    ax_hist.plot(hist_bins[:-1], hist_means2, label=rec_name_2)
+    ax_hist.set_xlabel('Voltage (μV)')
+    ax_hist.set_ylabel('Mean density')
+    ax_hist.set_ylim(None, ax_hist.get_ylim()[1]*1.4)
+    ocp.despine(ax_hist)
+    ax_hist.legend(frameon=False, loc="upper right")
+
+    # Bottom right - histogram difference matrix
+    ax_diff = fig.add_subplot(gs[1, 1])
+    hist_diff = data_summary[0]['hist_counts'] - data_summary[1]['hist_counts']
+    im = ax_diff.imshow(hist_diff.T, aspect='auto', cmap='RdBu_r', 
+                        extent=[0, hist_diff.shape[0], hist_bins[0], hist_bins[-1]])
+    ax_diff.set_xlabel('Voltage (μV)')
+    ax_diff.set_ylabel('Channel')
+    cax = ax_diff.inset_axes([1.05, 0.0, 0.05, 0.3])
+    plt.colorbar(im, cax=cax, label='Density difference')
 
     return fig
 
@@ -169,56 +211,27 @@ n_snippets = 5
 snippet_length_ms = 3000
 sample_every_n_channels = 1
 hist_bins = np.arange(-50, 51, 5)
-fs = rec.get_sampling_frequency()
 
-rec = rec2
-traces = get_trace_snippets(rec, sample_every_n_channels=sample_every_n_channels, 
-                           snippet_length_ms=snippet_length_ms, n_snippets=n_snippets)
+rec_name_1 = "mpm-rig/NPX1"
+rec_name_2 = "ephysroom-rig/NPX1"
+fig_dir = main_dir / "figures" / date / f"noise-comparison_{rec_name_1.replace('/', '_')}_{rec_name_2.replace('/', '_')}"
+fig_dir.mkdir(parents=True, exist_ok=True)
+data_summary = []
+for rec_name in [rec_name_1, rec_name_2]:
+    rec = get_recording(*rec_name.split("/"), "ProbeA")
+    fs = rec.get_sampling_frequency()
+    noise_levs = get_noise_levels(rec, method="std")
+    traces = get_trace_snippets(rec, sample_every_n_channels=sample_every_n_channels, 
+                            snippet_length_ms=snippet_length_ms, n_snippets=n_snippets)
 
-hist_counts = compute_voltage_histograms(traces, hist_bins)
-f, pxx = compute_power_spectrum(traces, rec, fs)
-fig = plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs,)
+    hist_counts = compute_voltage_histograms(traces, hist_bins)
+    f, pxx = compute_power_spectrum(traces, fs)
+    fig = plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs,)
+    fig.savefig(fig_dir / f"{rec_name.replace('/', '_')}.png", dpi=300)
+    data_summary.append(dict(rec_name=rec_name, traces=traces, hist_counts=hist_counts, pxx=pxx, noise_levs=noise_levs))
 
-# %%
 
-plt.show()
-# %%
+fig = plot_noise_comparison(data_summary, rec_name_1, rec_name_2, f, hist_bins)
 
-# %%
-# Set logarithmic scale
-ax.set_xscale('log')
-# Add colorbar and labels
-cbar = plt.colorbar(pcm, ax=ax, orientation='vertical', label="Log power")
-ax.set_xlabel("Frequency (Hz)")
-ax.set_ylabel("Channel")
-
-plt.show()
-# %%
-
-conditions = [
-    (
-        ("ephysroom-rig", "NPX1-NPX2"),
-        ("ephysroom-rig", "NPX1-NPX2_light")
-    ),
-    (
-        ("ephysroom-rig", "NPX1-NPX2"), 
-        ("ephysroom-rig", "NPX1-NPX2_light_cover")
-    )
-]
-
-for (setup1, key1), (setup2, key2) in conditions:
-    noise_levs1 = get_recording_noise_levels(setup1, key1, "ProbeA")
-    noise_levs2 = get_recording_noise_levels(setup2, key2, "ProbeA")
-
-    f, ax = plt.subplots(figsize=(3, 3), gridspec_kw={"top": 0.9, "bottom"=0.2,
-                                                      "left": 0.2, "right": 0.2})
-    ax.scatter(noise_levs1, noise_levs2, s=10, alpha=0.5, lw=0)
-    xlims = (0, max(np.max(noise_levs1), np.max(noise_levs2))*1.02)
-    ax.plot(*[[1, xlims[1]*0.9]]*2, "k--", lw=1)
-    ax.set_xlim(xlims)
-    ax.set_ylim(xlims)
-    ax.set_xlabel(f"{setup1} {key1}")
-    ax.set_ylabel(f"{setup2} {key2}")
-    ax.set_yticks(ax.get_xticks())
-    plt.tight_layout()
+fig.savefig(fig_dir / f"noise-comparison_{rec_name_1.replace('/', '_')}_{rec_name_2.replace('/', '_')}.png", dpi=300)
 # %%
