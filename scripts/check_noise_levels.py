@@ -201,8 +201,8 @@ def plot_noise_comparison(data_summary, rec_name_1, rec_name_2, f, hist_bins):
                         extent=[0, hist_diff.shape[0], hist_bins[0], hist_bins[-1]])
     ax_diff.set_xlabel('Voltage (μV)')
     ax_diff.set_ylabel('Channel')
-    cax = ax_diff.inset_axes([1.05, 0.0, 0.05, 0.3])
-    plt.colorbar(im, cax=cax, label='Density difference')
+    cax = ax_diff.inset_axes([1.05, 0.5-0.3/2, 0.05, 0.3])
+    plt.colorbar(im, cax=cax, label=f'Density ({rec_name_1} - {rec_name_2})')
 
     return fig
 
@@ -213,7 +213,7 @@ sample_every_n_channels = 1
 hist_bins = np.arange(-50, 51, 5)
 
 rec_name_1 = "mpm-rig/NPX1"
-rec_name_2 = "ephysroom-rig/NPX1"
+rec_name_2 = "mpm-rig/NPX1-NPX2"
 fig_dir = main_dir / "figures" / date / f"noise-comparison_{rec_name_1.replace('/', '_')}_{rec_name_2.replace('/', '_')}"
 fig_dir.mkdir(parents=True, exist_ok=True)
 data_summary = []
