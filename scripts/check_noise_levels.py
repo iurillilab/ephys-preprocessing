@@ -71,7 +71,7 @@ def get_trace_snippets(rec, sample_every_n_channels=1, snippet_length_ms=3000,
 
     return np.concatenate(trace_snippets, axis=0)
 
-def compute_power_spectrum(traces, rec, fs, freq_range=(10, 10000)):
+def compute_power_spectrum(traces, fs, freq_range=(10, 10000)):
     """Compute power spectrum using Welch's method and average across channels"""
     freqs = np.arange(freq_range[0], freq_range[1], 1)
     nperseg = fs
