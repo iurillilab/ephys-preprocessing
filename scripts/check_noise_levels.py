@@ -14,14 +14,27 @@ import ocplot as ocp
 # Path to a valid OpenEphys recording:
 # main_dir = Path("/Users/vigji/Desktop/noise_tests")
 # main_dir = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-rigs-tests")
-main_dir = Path("/Volumes/Extreme SSD/ephys-rigs-tests")
+main_dir = Path("/Users/vigji/Desktop/noise_tests")
 assert main_dir.exists(), "main_dir does not exist, check path"
-date = "20241115"
+date1 = "20241218"
+date2 = "20241218"
 
-def get_recording(setup, probe_combination, probe_name):
+rec_name_1 = "ganesha-rig/NPX2"
+rec_name_2 = "ganesha-rig/NPX2_LEDS"
+fig_dir = main_dir / "figures" / f"noise-comparison_{date1}_{rec_name_1.replace('/', '_')}_{date2}_{rec_name_2.replace('/', '_')}"
+
+probe_type = "NPX2"
+n_snippets = 10
+snippet_length_ms = 1000
+sample_every_n_channels = 1
+offset_subtract = True
+hist_bins = np.arange(-50, 51, 5) if probe_type == "NPX1" else np.arange(-50, 51, 5)
+vlim = 10 if probe_type == "NPX1" else 40
+
+def get_recording(setup, probe_combination, probe_name, date):
     setup = main_dir / setup / date
     probe_dir = setup / f"{probe_combination}_test_noise"
-    # print(probe_dir, probe_dir.exists())
+    print(probe_dir, probe_dir.exists())
     recording_path = next(probe_dir.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]"))
     rec_folder = OEPhysDataFolder(recording_path)
     # print(rec_folder.reference_stream_name)
@@ -36,7 +49,7 @@ def get_recording_noise_levels(setup, probe_combination, probe_name, method="std
 
 
 def get_trace_snippets(rec, sample_every_n_channels=1, snippet_length_ms=3000, 
-                       n_snippets=5, offset_subtract=False, verbose=True):
+                       n_snippets=5, offset_subtract=True, verbose=True):
     """Get random snippets of traces from recording, sampled across channels."""
     channels_to_sample = rec.get_channel_ids()[::sample_every_n_channels]
     
@@ -184,8 +197,8 @@ def plot_noise_comparison(data_summary, rec_name_1, rec_name_2, f, hist_bins):
 
     # Bottom left - mean density histograms
     ax_hist = fig.add_subplot(gs[1, 0])
-    hist_means1 = data_summary[0]['hist_counts'].mean(axis=1)
-    hist_means2 = data_summary[1]['hist_counts'].mean(axis=1)
+    hist_means1 = np.nanmean(data_summary[0]['hist_counts'], axis=1)
+    hist_means2 = np.nanmean(data_summary[1]['hist_counts'], axis=1)
     ax_hist.plot(hist_bins[:-1], hist_means1, label=rec_name_1)
     ax_hist.plot(hist_bins[:-1], hist_means2, label=rec_name_2)
     ax_hist.set_xlabel('Voltage (μV)')
@@ -206,27 +219,20 @@ def plot_noise_comparison(data_summary, rec_name_1, rec_name_2, f, hist_bins):
 
     return fig
 
-# %%
-n_snippets = 5
-snippet_length_ms = 3000
-sample_every_n_channels = 1
-hist_bins = np.arange(-50, 51, 5)
 
-rec_name_1 = "mpm-rig/NPX1"
-rec_name_2 = "mpm-rig/NPX1-NPX2"
-fig_dir = main_dir / "figures" / date / f"noise-comparison_{rec_name_1.replace('/', '_')}_{rec_name_2.replace('/', '_')}"
 fig_dir.mkdir(parents=True, exist_ok=True)
 data_summary = []
-for rec_name in [rec_name_1, rec_name_2]:
-    rec = get_recording(*rec_name.split("/"), "ProbeA" if "NPX" in rec_name else "ProbeB")
+for rec_name, date in [(rec_name_1, date1), (rec_name_2, date2)]:
+    probename = "ProbeA" if "NPX" in rec_name else "ProbeB"
+    rec = get_recording(*rec_name.split("/"), probename, date)
     fs = rec.get_sampling_frequency()
     noise_levs = get_noise_levels(rec, method="std")
     traces = get_trace_snippets(rec, sample_every_n_channels=sample_every_n_channels, 
-                            snippet_length_ms=snippet_length_ms, n_snippets=n_snippets)
+                            snippet_length_ms=snippet_length_ms, n_snippets=n_snippets, offset_subtract=offset_subtract)
 
     hist_counts = compute_voltage_histograms(traces, hist_bins)
     f, pxx = compute_power_spectrum(traces, fs)
-    fig = plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs,)
+    fig = plot_noise_analysis(traces, hist_counts, f, pxx, snippet_length_ms, fs, vlim=vlim)
     fig.savefig(fig_dir / f"{rec_name.replace('/', '_')}.png", dpi=300)
     data_summary.append(dict(rec_name=rec_name, traces=traces, hist_counts=hist_counts, pxx=pxx, noise_levs=noise_levs))
 
