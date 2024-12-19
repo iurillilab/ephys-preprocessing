@@ -218,7 +218,7 @@ fig_dir = main_dir / "figures" / date / f"noise-comparison_{rec_name_1.replace('
 fig_dir.mkdir(parents=True, exist_ok=True)
 data_summary = []
 for rec_name in [rec_name_1, rec_name_2]:
-    rec = get_recording(*rec_name.split("/"), "ProbeA")
+    rec = get_recording(*rec_name.split("/"), "ProbeA" if "NPX" in rec_name else "ProbeB")
     fs = rec.get_sampling_frequency()
     noise_levs = get_noise_levels(rec, method="std")
     traces = get_trace_snippets(rec, sample_every_n_channels=sample_every_n_channels, 
