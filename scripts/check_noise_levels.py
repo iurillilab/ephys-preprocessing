@@ -16,11 +16,14 @@ import ocplot as ocp
 # main_dir = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-rigs-tests")
 main_dir = Path("/Users/vigji/Desktop/noise_tests")
 assert main_dir.exists(), "main_dir does not exist, check path"
-date1 = "20241218"
-date2 = "20241218"
+date1 = "20241220"
+date2 = "20241220"
+
+# date2 = "20241115"
 
 rec_name_1 = "ganesha-rig/NPX2"
-rec_name_2 = "ganesha-rig/NPX2_LEDS"
+rec_name_2 = "ganesha-rig/NPX1-NPX2"
+# rec_name_2 = "ephysroom-rig/NPX2"
 fig_dir = main_dir / "figures" / f"noise-comparison_{date1}_{rec_name_1.replace('/', '_')}_{date2}_{rec_name_2.replace('/', '_')}"
 
 probe_type = "NPX2"
