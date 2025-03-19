@@ -1,93 +1,93 @@
-# %%
+#%%
 %matplotlib widget
 import spikeinterface.extractors as se
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-
+#%%
 # Path to a valid OpenEphys recording:
-recording_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/setup-calibrations/ephys-rigs-tests/mpm-rig/20241115/nidaq_rig_synch_test/long/2024-11-13_14-39-11")
-
+recording_path = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04')
+#%%
 # To read the recording, we need to look in the folder the name of the record node
-# and the streams that we want to read. The full stream name is "Record Node XXX#stream name"
-recording_daq = se.read_openephys(recording_path, stream_name="Record Node 111#NI-DAQmx-112.PXIe-6341")
-recording_npx1 = se.read_openephys(recording_path, stream_name="Record Node 111#Neuropix-PXI-110.ProbeA-AP")
-recording_npx2 = se.read_openephys(recording_path, stream_name="Record Node 111#Neuropix-PXI-110.ProbeB")
+# and the streams that we want to read. The full stream name is "Record Node xxx#stream name"
+# recording_daq = se.read_openephys(recording_path, stream_name="Record Node 102#NI-DAQmx-102.PXIe-6341")
+recording_npx1 = se.read_openephys(recording_path, stream_name="Record Node 102#Neuropix-PXI-100.ProbeB-AP")
+# recording_npx2 = se.read_openephys(recording_path, stream_name="Record Node 107#Neuropix-PXI-100.ProbeB-LFP")
 
 # %%
-dir(recording_daq)
+dir(recording_npx1)
 # %%
-# ================================
 # Loading information on the recording
 # Sampling frequency:
-recording_daq.get_sampling_frequency()
+recording_npx1.get_sampling_frequency()
 
 # Read channel info:
-recording_daq.get_channel_ids()
+chan = recording_npx1.get_channel_ids() # channel names
+chan.size
 
-# Read time duration info:
-print("Number of frames:", recording_daq.get_num_frames())  # number of samples
-print("Duration in seconds:", recording_daq.get_total_duration())
-
+# # Read time duration info:
+print("Number of frames:", recording_npx1.get_num_frames())  # number of samples
+print("Duration in seconds:", recording_npx1.get_total_duration())
 
 # %%
-# We need to be careful with time info if we look at raw signals: the starting point
-# of each stream do not necessarily match!
-print(recording_daq.get_time_info())
-print(recording_npx2.get_time_info())
-# %%
-# ================================
-# Loading traces
-
+# We need to be careful with time info if we look at raw signals: the starting point of each stream do not necessarily match!
+# print(recording_daq.get_time_info())
+print(recording_npx1.get_time_info())
+#%%
 # We do not want to load the full traces in memory:
-# We want to read 50 seconds:
-n_seconds = 5
-n_samples = n_seconds * recording_daq.get_sampling_frequency()
-trace = recording_daq.get_traces(start_frame=0, end_frame=n_samples, channel_ids=["AI0", "AI1"])
-type(trace)  # this is not a numpy array! this is a memory view
-# What does this mean?
-# Data is not loaded in memory until we use it, but we can still know stuff about the array:
-trace.shape
+# We want to read the first initial seconds:
+sampling_frequency = recording_npx1.get_sampling_frequency()
+n_seconds = 0.1
+start_frame_cust = 1000000 + int(0.4*30000)
+n_samples = int(n_seconds * recording_npx1.get_sampling_frequency())
+npx1_trace = recording_npx1.get_traces(start_frame=start_frame_cust, end_frame=start_frame_cust + n_samples, channel_ids=['AP345']) 
 
-# %%
 # To really load the data in memory, we can use the np.array() function.
 # Until we do this we do not have to wait for loading time from the disk! 
 # Useful for big data on slow disks like the NAS.
-trace_numpy = np.array(trace)
-type(trace_numpy)
+# trace_numpy = np.array(trace)
+# type(trace_numpy)
+# trace_numpy
+npx1_trace = np.array(npx1_trace)
 
-# %%
-# ================================
-# Loading events
-# Extract events. aka digital signals:
-events = se.read_openephys_event(recording_path)
+#if you dont have a DAQ trace, we create a time series to plot the npx1 trace based off on the size of the NPX trace
+time_trace = np.arange(npx1_trace.shape[0]) / sampling_frequency
 
-events_array = events.get_events(channel_id='PXIe-6341Digital Input Line')
-# Note: this currently works only if there is a single digital input line.
-# For multiple ones there is a known bug in spikeinterface, which hopefully 
-# will be fixed soon: https://github.com/NeuralEnsemble/python-neo/issues/1437
-events_array
-# %%
-# The alternative is to read the events from the .npy files directly:
-evts_path = recording_path  / "Record Node 111/experiment1/recording3/events/NI-DAQmx-112.PXIe-6341/TTL"
-
-full_words = np.load(evts_path / "full_words.npy")
-sample_numbers = np.load(evts_path / "sample_numbers.npy")
-states = np.load(evts_path / "states.npy")
-timestamps = np.load(evts_path / "timestamps.npy")
-# %%
-len(full_words)
-# %%
-np.unique(full_words)
-# %%
-stacked = np.stack([timestamps, full_words, states], axis=1)
-clock = stacked[np.abs(stacked[:, -1]) == 1]
-laser = stacked[np.abs(stacked[:, -1]) == 2]
-
-laser[0, 0] - clock[0, 0]
-# %%
+#now lets plot the trace and see our data
 plt.figure()
-# plt.plot(np.diff(clock[:, 0]))
-plt.plot(np.diff(laser[:, 0]))
+# plt.plot(time_trace, npx1_trace[:, 0])
+plt.plot(time_trace, npx1_trace)
+#%%
+len(time_trace)
+#%%
+# Define 1-second trace extraction points: beginning, middle, and end
+total_frames = recording_npx1.get_num_frames()
+sampling_frequency = recording_npx1.get_sampling_frequency()
+time_range = 1
+n_samples = int(time_range*sampling_frequency)  # 1 second worth of samples
+start_frames = [start_frame_cust, total_frames // 2 - n_samples // 2, total_frames - n_samples]
 
-# %%
+# Extract traces for each point
+traces = []
+time_traces = []
+for start_frame in start_frames:
+    trace = recording_npx1.get_traces(start_frame=start_frame, end_frame=start_frame + n_samples)
+    trace = np.array(trace)
+    traces.append(trace)
+    time_traces.append(np.arange(trace.shape[0]) / sampling_frequency)
+
+# Plot the traces using imshow
+plt.figure(figsize=(10, 6))
+labels = ["Beginning", "Middle", "End"]
+for i, trace in enumerate(traces):
+    plt.subplot(1, 3, i + 1)  # Create a subplot for each trace
+    time_extent = [0, trace.shape[0] / sampling_frequency]  # Scale x-axis to seconds
+    channel_extent = [0, trace.shape[1]]  # Channels on y-axis
+    plt.imshow(trace.T, aspect='auto', cmap='RdBu', vmin=-300, vmax=300, extent=[*time_extent, *channel_extent])
+    plt.title(f'{labels[i]} (1s)')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Channels')
+    plt.colorbar(label='Amplitude')
+
+plt.tight_layout()
+plt.show()
