@@ -7,10 +7,10 @@ import spikeinterface.preprocessing as st
 import pandas as pd
 from pathlib import Path
 import numpy as np
-data_path = Path("/Users/vigji/Desktop/mouse_data")
+data_path = Path("/Users/vigji/Desktop/short_recording_oneshank")
 
 # %%
-recording_extractor = se.read_openephys(data_path, stream_name="Record Node 111#Neuropix-PXI-110.ProbeA")
+recording_extractor = se.read_openephys(data_path, stream_name="Record Node 102#Neuropix-PXI-100.ProbeB-AP")
 recording = st.correct_lsb(recording_extractor, verbose=1)
 recording = st.bandpass_filter(recording, freq_min=300, freq_max=4000)
 recording = st.phase_shift(recording) #lazy
