@@ -2,9 +2,34 @@
 %matplotlib widget
 import spikeinterface.extractors as se
 import spikeinterface.preprocessing as spkp
+import spikeinterface.full as si
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+from probeinterface.plotting import plot_probe, plot_probe_group
+import time
+import os
+try:
+    from kilosort import io, run_kilosort
+except ImportError:
+    print("Kilosort not installed")
+    pass
+import json
+try:
+    import torch
+except ImportError:
+    print("Torch not installed")
+    torch = None
+    pass
+
+try:
+    from nwb_conv.oephys import OEPhysDataFolder
+except ImportError:
+    print("nwb-conv not installed")
+    pass
+
+import spikeinterface.sorters as ss
+
 
 #%% Path to an OpenEphys recording:
 recording_path = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04')
@@ -160,68 +185,25 @@ plt.tight_layout()
 plt.show()
 
 # %%
-import kilosort
-# %%
 from kilosort import run_kilosort
 # %%
-def call_ks(preprocessed_recording, stream_name, working_folder_path, callKSfromSI=True, remove_binary=True):
-    working_folder_path = Path(working_folder_path)
-    
-    DTYPE = np.int16
-    
-    probe = preprocessed_recording.get_probe()
-
-    if callKSfromSI: #takes forever even with latest spikeinterface version. stopped it.
-        # call kilosort from here, without saving the .bin (will have to call something else to run phy)
-        print("Starting KS4")
-        t_start = time.perf_counter()
-        sorting_ks4_prop = ss.run_sorter_by_property("kilosort4", recording=preprocessed_recording, 
-                        grouping_property="group", working_folder=working_folder_path, verbose=True)
-        t_stop = time.perf_counter()
-        elapsed_prop = np.round(t_stop - t_start, 2)
-        print(f"Elapsed time by property: {elapsed_prop} s")
-
-    else:
-        # kilosort export .bin continuous data (this can be read by phy too)
-        # haven't tried the wrapper, pessimistic about the time it takes
-        probename = "probe_{}.prb".format(stream_name)
-        filename, N, c, s, fs, probe_path = io.spikeinterface_to_binary(
-            preprocessed_recording, working_folder_path, data_name='data.bin', dtype=DTYPE,
-            chunksize=60000, export_probe=True, probe_name=probename
-            )
-        
-        #run KS programmatically
-        settings = {'fs': fs, 'n_chan_bin': probe.get_contact_count()}
-        probe_dict = io.load_probe(probe_path)
-        kilosort_optional_params = {}
-        if torch is not None:
-            kilosort_optional_params["device"] = torch.device("cuda")
-
-        ops, st_ks, clu, tF, Wall, similar_templates, is_ref, est_contam_rate, kept_spikes = run_kilosort(
-                            settings=settings, probe=probe_dict, filename=filename, data_dtype=DTYPE, **kilosort_optional_params
-        )
-
-        # decide whether you want to delete data.bin afterwards
-        bin_path = working_folder_path / 'data.bin'
-        if bin_path.exists() and remove_binary:
-            bin_path.unlink()
-
-#%%
-call_ks(rec, "neuropixPhase3B1_kilosortChanMap.mat", working_folder_path=r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4')
+folder_path= r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP'
+output_folder = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4'
+sort = ss.run_sorter('kilosort4', rec, output_folder= output_folder, verbose=True)
 # %%
-settings = DEFAULT_SETTINGS
-# ( path to drive if mounted: /content/drive/MyDrive/ )
-settings['data_dir'] = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP'
-settings['n_chan_bin'] = 384
+# settings = DEFAULT_SETTINGS
+# # ( path to drive if mounted: /content/drive/MyDrive/ )
+# settings['data_dir'] = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP'
+# settings['n_chan_bin'] = 384
 
-ops, st, clu, tF, Wall, similar_templates, is_ref, est_contam_rate, kept_spikes = \
-    run_kilosort(settings=settings, probe_name='neuropixPhase3B1_kilosortChanMap.mat')
+# ops, st, clu, tF, Wall, similar_templates, is_ref, est_contam_rate, kept_spikes = \
+#     run_kilosort(settings=settings, probe_name='neuropixPhase3B1_kilosortChanMap.mat')
  # %%
 import pandas as pd
 #%%
 
 # outputs saved to results_dir
-results_dir = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4')
+results_dir = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4\sorter_output')
 ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
 camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
 contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
