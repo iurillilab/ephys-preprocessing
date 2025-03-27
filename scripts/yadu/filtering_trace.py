@@ -23,7 +23,7 @@ except ImportError:
     pass
 
 try:
-    from nwb_conv.oephys import OEPhysDataFolder
+    from nwb_conv.oephys import OEPhysDataFolder # type: ignore
 except ImportError:
     print("nwb-conv not installed")
     pass

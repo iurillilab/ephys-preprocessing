@@ -102,3 +102,5 @@ ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
 # Load other data
 camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
 contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
+
+#%%
