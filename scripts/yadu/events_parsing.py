@@ -41,47 +41,6 @@ plt.plot(np.diff(laser[:, 0]))
 # %%
 motor_log = pd.read_csv(r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\153729\motor-log_2025-03-09T15_37_29.csv')
 motor_log
-# %% Indexing examples using pandas DataFrame
-# Create a simple DataFrame for indexing demonstration
-import pandas as pd
-df = pd.DataFrame({
-    'A': [10, 20, 30, 40],
-    'B': ['x', 'y', 'z', 'w']
-})
-df
-#%%
-
-# Label-based indexing with .loc
-# Get the value in row index 0 (as label) for column 'A'
-val_loc = df.loc[0, 'A']
-val_loc
-#%%
-# Integer-based indexing with .iloc
-# Get the same value using positional indexing: first row, first column
-val_iloc = df.iloc[0, 0]
-val_iloc
-#%%
-# Boolean indexing: rows where column 'A' is greater than 20
-filtered_df = df[df['A'] > 20]
-
-print("Value using .loc:", val_loc)
-print("Value using .iloc:", val_iloc)
-print("Filtered DataFrame:\n", filtered_df)
-# %% Swapping column values in a pandas DataFrame
-
-# Create a sample DataFrame with columns 'A' and 'B'
-df_swap = pd.DataFrame({
-    'A': [1, 2, 3],
-    'B': [4, 5, 6]
-})
-print("Before swapping:")
-print(df_swap)
-
-# Swap columns 'A' and 'B'
-df_swap[['A', 'B']] = df_swap[['B', 'A']].values
-
-print("After swapping:")
-print(df_swap)
 # %%
 motor_log[['Value.Radius', 'Value.Theta']] = motor_log[['Value.Theta', 'Value.Radius']].values
 motor_log
