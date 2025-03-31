@@ -1,5 +1,6 @@
 #%%
-%matplotlib widget
+import matplotlib
+matplotlib.use('TkAgg')  # Or another backend suitable for your environment
 import spikeinterface.extractors as se
 import spikeinterface.preprocessing as spkp
 import spikeinterface.full as si

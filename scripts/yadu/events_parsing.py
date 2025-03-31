@@ -16,19 +16,7 @@ recording_path_nas = r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesth
 events = se.read_openephys_event(recording_path)
 
 events_array = events.get_events(channel_id='PXIe-6341Digital Input Line')
-# event_times = events.get_event_times(channel_id='PXIe-6341Digital Input Line')
-# event_times
 events_array
-# %% Sorting events_array by the label field
-# To sort the structured numpy array by the 'label' field:
-sorted_events_array = np.sort(events_array, order='label')
-print("Sorted events_array by label:")
-print(sorted_events_array)
-
-# Alternatively, if you want to only select events with label "2":
-events_with_label_3 = events_array[events_array['label'] == "2"]
-print("Events with label '3':")
-print(events_with_label_3)
 # %%
 recording_path_events =Path(r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\2025-03-09_15-37-57\Record Node 107\experiment1\recording1\events\NI-DAQmx-102.PXIe-6341\TTL')
 evts_path = recording_path_events
@@ -53,14 +41,12 @@ plt.plot(np.diff(laser[:, 0]))
 # %%
 motor_log = pd.read_csv(r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\153729\motor-log_2025-03-09T15_37_29.csv')
 motor_log
+# motor_log.drop(0)
 # %%
 motor_log[['Value.Radius', 'Value.Theta']] = motor_log[['Value.Theta', 'Value.Radius']].values
 motor_log
+
 # %%
-motor_log[['Value.Direction', 'Value.Theta']] = motor_log[['Value.Theta', 'Value.Direction']].values
-motor_log
-# %%
-# %% Calculate difference between rows in the 'Value.Radius' column of motor_log
 motor_log['timestamp_diff'] = pd.to_datetime(motor_log['Timestamp']).diff()
 print("Differences in 'Timestamp':")
 print(motor_log['timestamp_diff'])
@@ -92,6 +78,21 @@ plt.plot(events_with_label_4['label'], 'o')
 
 #%%
 len(events_with_label_4)# %%
-
+# %%
+motor_log = motor_log.drop("Value.Theta", axis=1)
+motor_log = motor_log.drop("timestamp_diff", axis=1)
 # %%
 
+NIDAQ_time = events_with_label_4['time']
+NIDAQ_duration = events_with_label_4['duration']
+# %%
+motor_log['timestamp_NIDAQ'] = NIDAQ_time
+motor_log['duration_NIDAQ'] = NIDAQ_duration
+
+# %%
+motor_log['movement_onset'] = motor_log['timestamp_NIDAQ'] + motor_log['duration_NIDAQ'].shift(1)
+motor_log['movement_offset'] = motor_log['timestamp_NIDAQ'] - motor_log['duration_NIDAQ'].shift(1)
+#%%
+# motor_log = motor_log.drop(0)
+# motor_log = motor_log.drop('timestamp_diff_sec', axis=1)
+motor_log
