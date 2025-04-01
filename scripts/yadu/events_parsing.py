@@ -112,4 +112,7 @@ home_movement = home_movement.reset_index(drop=True)
 trial_log['home_movement_on'] = home_movement['home_movement_on']
 trial_log['home_movement_off'] = home_movement['home_movement_off']
 trial_log.drop(['Timestamp', 'timestamp_NIDAQ', 'duration_NIDAQ'], axis=1, inplace=True)
+# %%
 trial_log
+
+# %%
