@@ -82,10 +82,9 @@ len(events_with_label_4)# %%
 motor_log = motor_log.drop("Value.Theta", axis=1)
 motor_log = motor_log.drop("timestamp_diff", axis=1)
 # %%
-
 NIDAQ_time = events_with_label_4['time']
 NIDAQ_duration = events_with_label_4['duration']
-# %%A
+# %%
 motor_log['timestamp_NIDAQ'] = NIDAQ_time
 motor_log['duration_NIDAQ'] = NIDAQ_duration
 
@@ -108,11 +107,9 @@ trial_log = trial_log.reset_index(drop=True)
 #%%
 home_movement = motor_log.loc[motor_log['Value.Radius'] == 5, ['home_movement_on', 'home_movement_off']]
 home_movement = home_movement.reset_index(drop=True)
+
 # %%
-# trial_log['home_movement_on'] = motor_log.loc[motor_log['Value.Radius'] == 5, 'home_movement_on']
 trial_log['home_movement_on'] = home_movement['home_movement_on']
 trial_log['home_movement_off'] = home_movement['home_movement_off']
-trial_log   
-# %%
-motor_log
-# %%
+trial_log.drop(['Timestamp', 'timestamp_NIDAQ', 'duration_NIDAQ'], axis=1, inplace=True)
+trial_log
