@@ -85,14 +85,34 @@ motor_log = motor_log.drop("timestamp_diff", axis=1)
 
 NIDAQ_time = events_with_label_4['time']
 NIDAQ_duration = events_with_label_4['duration']
-# %%
+# %%A
 motor_log['timestamp_NIDAQ'] = NIDAQ_time
 motor_log['duration_NIDAQ'] = NIDAQ_duration
 
 # %%
-motor_log['movement_onset'] = motor_log['timestamp_NIDAQ'] + motor_log['duration_NIDAQ'].shift(1)
-motor_log['movement_offset'] = motor_log['timestamp_NIDAQ'] - motor_log['duration_NIDAQ'].shift(1)
+motor_log['set_movement_on'] = motor_log['timestamp_NIDAQ']
+motor_log['set_movement_off'] = motor_log['timestamp_NIDAQ'] + motor_log['duration_NIDAQ']
+
+
+# Filter rows where Value.Radius equals 5 and add the new columns:
+motor_log.loc[motor_log['Value.Radius'] == 5, 'home_movement_on'] = motor_log.loc[motor_log['Value.Radius'] == 5, 'timestamp_NIDAQ']
+motor_log.loc[motor_log['Value.Radius'] == 5, 'home_movement_off'] = motor_log.loc[motor_log['Value.Radius'] == 5, 'timestamp_NIDAQ'] + motor_log.loc[motor_log['Value.Radius'] == 5, 'duration_NIDAQ']
 #%%
 # motor_log = motor_log.drop(0)
 # motor_log = motor_log.drop('timestamp_diff_sec', axis=1)
+motor_log 
+# %%
+trial_log = motor_log[motor_log['Value.Radius'] != 5]
+trial_log = trial_log.drop(['timestamp_diff_sec', 'home_movement_on', 'home_movement_off'], axis=1)
+trial_log = trial_log.reset_index(drop=True)
+#%%
+home_movement = motor_log.loc[motor_log['Value.Radius'] == 5, ['home_movement_on', 'home_movement_off']]
+home_movement = home_movement.reset_index(drop=True)
+# %%
+# trial_log['home_movement_on'] = motor_log.loc[motor_log['Value.Radius'] == 5, 'home_movement_on']
+trial_log['home_movement_on'] = home_movement['home_movement_on']
+trial_log['home_movement_off'] = home_movement['home_movement_off']
+trial_log   
+# %%
 motor_log
+# %%
