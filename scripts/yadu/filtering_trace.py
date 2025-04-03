@@ -8,7 +8,7 @@ import time
 import os
 import spikeinterface.sorters as ss
 import pandas as pd
-
+import matplotlib.pyplot as plt
 #%% Path to an OpenEphys recording:
 parent_path = Path(r'Y:')
 recording_path = parent_path/ '20250124'/ 'M20' / 'test_npx1' / '2025-01-24_19-56-04'
