@@ -8,10 +8,11 @@ import time
 import os
 import spikeinterface.sorters as ss
 import pandas as pd
-import matplotlib.pyplot as plt
 #%% Path to an OpenEphys recording:
 parent_path = Path(r'Y:')
 recording_path = parent_path/ '20250124'/ 'M20' / 'test_npx1' / '2025-01-24_19-56-04'
+folder_path = recording_path /'Record Node 102' /'experiment1' / 'recording1' / 'continuous' / 'Neuropix-PXI-100.ProbeB-AP'
+output_folder = parent_path / '20250124' / 'M20' / 'kilosort4'
 #%% To read the recording, we need to look in the folder the name of the record node and the streams that we want to read. The full stream name is "Record Node xxx#stream name"
 # recording_daq = se.read_openephys(recording_path, stream_name="Record Node 102#NI-DAQmx-102.PXIe-6341")
 recording_npx1 = se.read_openephys(recording_path, stream_name="Record Node 102#Neuropix-PXI-100.ProbeB-AP")
@@ -58,9 +59,7 @@ rec = spkp.interpolate_bad_channels(recording=rec, bad_channel_ids=bad_channel_i
 # %%
 rec = spkp.highpass_spatial_filter(recording=rec)
 # %%
-folder_path= r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP'
-output_folder = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4'
-sort = ss.run_sorter('kilosort4', rec, output_folder= output_folder, verbose=True)
+sort = ss.run_sorter('kilosort4', rec, verbose=True, n_jobs = -1)
  # %%
 # outputs saved to results_dir
 results_dir = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4\sorter_output')
