@@ -40,11 +40,11 @@ print(recording_npx1.get_time_info())
 # npx1_trace = recording_npx1.get_traces(start_frame=start_frame_cust, end_frame=start_frame_cust + n_samples, channel_ids=['AP345']) 
 
 # To really load the data in memory, we can use the np.array() function, Until we do this we do not have to wait for loading time from the disk! 
-# Useful for big data on slow disks like the NAS.
-npx1_trace = np.array(npx1_trace)
+# # Useful for big data on slow disks like the NAS.
+# npx1_trace = np.array(npx1_trace)
 
-#if you dont have a DAQ trace, we create a time series to plot the npx trace based off on the size of the NPX trace
-time_trace = np.arange(npx1_trace.shape[0]) / sampling_frequency
+# #if you dont have a DAQ trace, we create a time series to plot the npx trace based off on the size of the NPX trace
+# time_trace = np.arange(npx1_trace.shape[0]) / sampling_frequency
 #%%
 rec = spkp.phase_shift(recording = recording_npx1 , margin_ms=40.0, inter_sample_shift=None, dtype=None)
 rec_cmr = spkp.common_reference(recording=recording_npx1, operator="median", reference="global")
