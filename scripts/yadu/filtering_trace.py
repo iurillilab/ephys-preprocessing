@@ -62,7 +62,7 @@ rec = spkp.highpass_spatial_filter(recording=rec)
 sort = ss.run_sorter('kilosort4', rec, verbose=True, n_jobs = -1)
  # %%
 # outputs saved to results_dir
-results_dir = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4\sorter_output')
+output_folder = parent_path / '20250124' / 'M20' / 'kilosort4' / 'sorter_output'
 ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
 camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
 contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
