@@ -38,11 +38,17 @@ print(recording_npx1.get_time_info())
 # start_frame_cust = 1000000 + int(0.4*30000)
 # n_samples = int(n_seconds * recording_npx1.get_sampling_frequency())
 # npx1_trace = recording_npx1.get_traces(start_frame=start_frame_cust, end_frame=start_frame_cust + n_samples, channel_ids=['AP345']) 
+# n_seconds = 0.1
+# start_frame_cust = 1000000 + int(0.4*30000)
+# n_samples = int(n_seconds * recording_npx1.get_sampling_frequency())
+# npx1_trace = recording_npx1.get_traces(start_frame=start_frame_cust, end_frame=start_frame_cust + n_samples, channel_ids=['AP345']) 
 
-# To really load the data in memory, we can use the np.array() function, Until we do this we do not have to wait for loading time from the disk! 
+# # To really load the data in memory, we can use the np.array() function, Until we do this we do not have to wait for loading time from the disk! 
 # # Useful for big data on slow disks like the NAS.
 # npx1_trace = np.array(npx1_trace)
 
+# #if you dont have a DAQ trace, we create a time series to plot the npx trace based off on the size of the NPX trace
+# time_trace = np.arange(npx1_trace.shape[0]) / sampling_frequency
 # #if you dont have a DAQ trace, we create a time series to plot the npx trace based off on the size of the NPX trace
 # time_trace = np.arange(npx1_trace.shape[0]) / sampling_frequency
 #%%
@@ -62,6 +68,19 @@ rec = spkp.highpass_spatial_filter(recording=rec)
 sort = ss.run_sorter('kilosort4', rec, folder=output_folder, n_jobs = -1, verbose=True)
 # %%
 # outputs saved to results_dir
+# results_dir = parent_path / '20250124' / 'M20' / 'kilosort4' / 'sorter_output'
+# ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
+# camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
+# contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
+# chan_map =  np.load(results_dir / 'channel_map.npy')
+# templates =  np.load(results_dir / 'templates.npy')
+# chan_best = (templates**2).sum(axis=1).argmax(axis=-1)
+# chan_best = chan_map[chan_best]
+# amplitudes = np.load(results_dir / 'amplitudes.npy')
+# st = np.load(results_dir / 'spike_times.npy')
+# clu = np.load(results_dir / 'spike_clusters.npy')
+# firing_rates = np.unique(clu, return_counts=True)[1] * 30000 / st.max()
+# dshift = ops['dshift']
 # results_dir = parent_path / '20250124' / 'M20' / 'kilosort4' / 'sorter_output'
 # ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
 # camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
