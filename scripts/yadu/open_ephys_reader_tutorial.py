@@ -4,6 +4,7 @@ import spikeinterface.extractors as se
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 #%%
 # Path to a valid OpenEphys recording:
 recording_path = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04')
@@ -91,3 +92,15 @@ for i, trace in enumerate(traces):
 
 plt.tight_layout()
 plt.show()
+
+# Convert results_dir to a Path object
+results_dir = Path(r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4')
+
+# Load ops.npy
+ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
+
+# Load other data
+camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
+contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
+
+#%%

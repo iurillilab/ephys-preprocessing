@@ -23,7 +23,9 @@ except ImportError:
 try:
     from nwb_conv.oephys import OEPhysDataFolder
 except ImportError:
-    print("nwb-conv not installed")
+    print("nwb-conv not installed!")
+    # lambda definition of dummy empty class OEPhysDataFolder
+    OEPhysDataFolder = type('OEPhysDataFolder', (object,), {'load_channel_barcode': lambda x: None, 'nidaq_recording': None})
     pass
 
 import spikeinterface.sorters as ss
@@ -89,7 +91,7 @@ def standard_preprocessing(recording_extractor):
     recording = recording.remove_channels(remove_channel_ids=bad_channel_ids)  # could be interpolated instead, but why?
 
     # split in groups and apply spatial filtering, then reaggregate. KS4 can now handle multiple shanks
-    if len(recording.get_probes()) > 1:
+    if recording_extractor.get_probes()[0].get_shank_count() > 1:
         grouped_recordings = recording.split_by(property='group')
         recgrouplist_hpsf = [st.highpass_spatial_filter(recording=grouped_recordings[k]) for k in grouped_recordings.keys()]  # cmr is slightly faster. results are similar
         recording_hpsf = si.aggregate_channels(recgrouplist_hpsf)
