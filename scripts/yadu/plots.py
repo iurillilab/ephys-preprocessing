@@ -1,4 +1,11 @@
-#now lets plot the trace and see our data
+#%%
+import matplotlib.pyplot as plt
+import numpy as np
+from pathlib import Path
+import pandas as pd
+
+
+# #now lets plot the trace and see our data
 plt.figure()
 # plt.plot(time_trace, npx1_trace[:, 0])
 plt.plot(time_trace, npx1_trace)
