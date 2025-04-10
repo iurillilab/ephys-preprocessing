@@ -2,6 +2,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
+import numpy as np
 
 from neuroconv.datainterfaces import KiloSortSortingInterface
 #%%
@@ -21,8 +22,18 @@ import pynapple as nap
 data = nap.load_file(nwbfile_path)
 data.key_to_id
 # %%
-z = data['units']
+spikes = data["units"]
+spikes
+#%%
+z = spikes['original_cluster_id']
+tmp = { 0:nap.Ts(t=np.arange(0,200), time_units='s'),1:nap.Ts(t=np.arange(0,200,0.5), time_units='s'),2:nap.Ts(t=np.arange(0,300,0.25), time_units='s'),}
 
-# %%
-z
+tsgroup = nap.TsGroup(tmp)
+
+ep = nap.IntervalSet(start=0, end=100, time_units='s')
+
+bincount = tsgroup.count(0.1, ep)
+
+bincount
+
 # %%

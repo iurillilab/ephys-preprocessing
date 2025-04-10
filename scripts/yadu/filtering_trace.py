@@ -66,31 +66,3 @@ rec = spkp.interpolate_bad_channels(recording=rec, bad_channel_ids=bad_channel_i
 rec = spkp.highpass_spatial_filter(recording=rec)
 # %%
 sort = ss.run_sorter('kilosort4', rec, folder=output_folder, n_jobs = -1, verbose=True)
-# %%
-# outputs saved to results_dir
-# results_dir = parent_path / '20250124' / 'M20' / 'kilosort4' / 'sorter_output'
-# ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
-# camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
-# contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
-# chan_map =  np.load(results_dir / 'channel_map.npy')
-# templates =  np.load(results_dir / 'templates.npy')
-# chan_best = (templates**2).sum(axis=1).argmax(axis=-1)
-# chan_best = chan_map[chan_best]
-# amplitudes = np.load(results_dir / 'amplitudes.npy')
-# st = np.load(results_dir / 'spike_times.npy')
-# clu = np.load(results_dir / 'spike_clusters.npy')
-# firing_rates = np.unique(clu, return_counts=True)[1] * 30000 / st.max()
-# dshift = ops['dshift']
-# results_dir = parent_path / '20250124' / 'M20' / 'kilosort4' / 'sorter_output'
-# ops = np.load(results_dir / 'ops.npy', allow_pickle=True).item()
-# camps = pd.read_csv(results_dir / 'cluster_Amplitude.tsv', sep='\t')['Amplitude'].values
-# contam_pct = pd.read_csv(results_dir / 'cluster_ContamPct.tsv', sep='\t')['ContamPct'].values
-# chan_map =  np.load(results_dir / 'channel_map.npy')
-# templates =  np.load(results_dir / 'templates.npy')
-# chan_best = (templates**2).sum(axis=1).argmax(axis=-1)
-# chan_best = chan_map[chan_best]
-# amplitudes = np.load(results_dir / 'amplitudes.npy')
-# st = np.load(results_dir / 'spike_times.npy')
-# clu = np.load(results_dir / 'spike_clusters.npy')
-# firing_rates = np.unique(clu, return_counts=True)[1] * 30000 / st.max()
-# dshift = ops['dshift']
