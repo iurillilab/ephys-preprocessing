@@ -11,6 +11,7 @@ import time
 import os
 import shutil
 import logging
+from spikeinterface.exporters import export_to_phy, export_report
 
 
 try:
@@ -146,7 +147,7 @@ def call_ks(preprocessed_recording, stream_name, working_folder_path,
     working_folder_path = Path(working_folder_path)
 
     if n_jobs is None:
-        n_jobs = os.cpu_count() - 1
+        n_jobs = os.cpu_count() // 2
 
     
     DTYPE = np.int16
@@ -166,10 +167,10 @@ def call_ks(preprocessed_recording, stream_name, working_folder_path,
         t_start = time.perf_counter()
         sorting_ks4 = ss.run_sorter_by_property(sorter_name="kilosort4", 
                                                 recording=preprocessed_recording, 
+                                                folder=working_folder_path, 
                                                 grouping_property="group", 
                                                 engine="joblib",
                                                 engine_kwargs={"n_jobs": n_jobs},
-                                                folder=working_folder_path, 
                                                 verbose=True)
         t_stop = time.perf_counter()
         elapsed_prop = np.round(t_stop - t_start, 2)
@@ -212,8 +213,10 @@ def call_ks(preprocessed_recording, stream_name, working_folder_path,
     return sorting_ks4
 
 
-def compute_stats(sorting_data_folder, sorter_object, recording, **job_kwargs):
+def compute_stats(sorting_data_folder, sorter_object, recording, logger=None, **job_kwargs):
      # first fix the params.py file saved by KS
+    diagnostics_message_streamer = logger.info if logger is not None else print
+
     found_paths = []
     found_paths = sorting_data_folder.rglob("params.py")
     # search_files(ks_folder, "params.py")
@@ -245,18 +248,18 @@ def compute_stats(sorting_data_folder, sorter_object, recording, **job_kwargs):
         )
 
         
-        logging.info("compute random spikes...")
+        diagnostics_message_streamer("compute random spikes...")
         analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500) #parent extension
-        logging.info("compute waveforms...")
+        diagnostics_message_streamer("compute waveforms...")
         analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0, **job_kwargs)
-        logging.info("compute templates...")
+        diagnostics_message_streamer("compute templates...")
         analyzer.compute("templates", operators=["average", "median", "std"])
         print(analyzer)
 
         si.compute_noise_levels(analyzer)   # return_scaled=True  #???
         si.compute_spike_amplitudes(analyzer)
 
-        logging.info("compute quality metrics...")
+        diagnostics_message_streamer("compute quality metrics...")
         start_time = time.time()
         dqm_params = si.get_default_qm_params()
         qms = analyzer.compute(input={"principal_components": dict(n_components=3, mode="by_channel_local"),
@@ -267,7 +270,13 @@ def compute_stats(sorting_data_folder, sorter_object, recording, **job_kwargs):
         print(metrics.columns)
         assert 'isolation_distance' in metrics.columns
         elapsed_time = time.time() - start_time
-        print(f"Elapsed time: {elapsed_time} seconds")
+        diagnostics_message_streamer(f"Elapsed time: {elapsed_time} seconds")
+
+        _ = analyzer.compute('correlograms')
+
+        # # the export process is fast because everything is pre-computed
+        export_to_phy(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "phy", copy_binary=False)
+        export_report(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "report")
 
 
 def find_laser_onsets_npx_idxs(oephys_data: OEPhysDataFolder, channel_name: str):
@@ -351,7 +360,7 @@ def plot_snippets(data_interface, n_snippets=4, padding_s=30, snippet_length_s=0
 
 
 def plot_raw_and_preprocessed(raw_extractor, preprocessed_extractor, n_snippets=4, padding_s=30, snippet_length_s=0.04,
-                              saving_path=None, v_maxs=(100, 50), stream_name=None):
+                              saving_path=None, v_maxs=(100, 100), stream_name=None):
     """
     Plot snippets of trace and preprocessed trace from the recording to check for drifts, artifacts, etc.
     Parameters

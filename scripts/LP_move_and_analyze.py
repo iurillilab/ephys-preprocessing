@@ -12,35 +12,43 @@ import numcodecs
 from preprocessing_utils import *
 from nwb_conv.oephys import OEPhysDataFolder
 from datetime import datetime
+import warnings
+
+# suppress all warnings:
+warnings.filterwarnings("ignore")
 
 # %%
 # CUSTOM PARAMETERS TO MODIFY:
 
-debug_mode = True
+debug_mode = False
+test_on_subset = False
 remove_laser_artifacts = True
 drift_correction_spikeinterface = False
 callKSfromSI = True
 
-debug_data_path = Path(r"D:\luigi\short_test_trace_parallel.zarr")
+debug_data_path = Path(r"D:\luigi\short_test_trace.zarr")
 
 # data locations to search for data, in decreasing order of priority:
-data_locat_first_opt = [Path(r"E:\local_loc"), 
-                        Path(r"F:\Luigi"), 
-                        Path(r"N:\SNeuroBiology_shared\P02_MPAOPTO_LP\e05_doubleservoarm-ephys-pagfiber\v01")]
+data_locat_first_opt = [Path(r"N:\SNeuroBiology_shared\P02_MPAOPTO_LP\e05_doubleservoarm-ephys-pagfiber\v01"),
+                        Path(r"F:\Luigi"),
+                        Path(r"E:\local_loc")]
 
 # folder to copy data to before processing:
-temporary_folder = Path(r"D:\luigi")
+master_temporary_folder = Path(r"D:\luigi")
+master_final_data_loc = Path(r"E:\ks_processed")
 
 # generate all tuples of (mouse, data_location, stream_name) to process:
-all_mice = ["M24",] # ["M22b"] + [f"M{i}" for i in range(19, 25)]
+all_mice = ["M23"]  #["M20", "M24", "M21", "M23", "M22", "M22b", "M19"] 
+
+n_seconds_subset = 300
+start_frame = 0
 
 # %%
-
 if __name__ == "__main__":
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     # final location to save processed data:
-    final_data_loc = Path(r"E:\ks_processed") / f"{timestamp}_{all_mice}_debug-{debug_mode}"
+    final_data_loc = master_final_data_loc / f"{timestamp}_{all_mice}_debug-{debug_mode}"
     final_data_loc.mkdir(exist_ok=True, parents=True)
 
     # save log file in final data location, and also print to console:
@@ -51,7 +59,7 @@ if __name__ == "__main__":
     tuples_to_process = []
     for mouse in all_mice:
         data_location = None
-        for folder_to_search in data_locat_first_opt + [temporary_folder]:
+        for folder_to_search in data_locat_first_opt: # + [temporary_folder]:
             try:
                 data_location = next(folder_to_search.glob(f"*{mouse}*"))
 
@@ -65,7 +73,7 @@ if __name__ == "__main__":
         
         all_stream_names, ap_stream_names = oephys_data.stream_names, oephys_data.ap_stream_names
 
-        new_tuple = (mouse, data_location, tuple(ap_stream_names))
+        new_tuple = (mouse, data_location, tuple(ap_stream_names[::-1]))
         print(new_tuple)
         tuples_to_process.append(new_tuple)
 
@@ -75,36 +83,36 @@ if __name__ == "__main__":
     logger.info(f"Processing the following tuples: {tuples_to_process}")
 
     # %%
-    job_kwargs = get_job_kwargs(chunk_duration="10s")
+    job_kwargs = get_job_kwargs(chunk_duration="1s")
+    si.set_global_job_kwargs(**job_kwargs)
 
 
-
-    for mouse, data_location, ap_stream_names in tuples_to_process:
+    for mouse, raw_data_location, ap_stream_names in tuples_to_process:
         # retrieve mouse data:
         logger.info(f"Processing mouse {mouse}...")
-        expected_source_dir = temporary_folder / mouse
-        if not expected_source_dir.exists():  
-            start_time = timestamp.now()
-            logger.info(f"Copying data from {source_data_dir} to {temporary_folder}")
-            source_data_dir = copy_folder(source_data_dir, temporary_folder)
 
-            logger.info(f"Data copied (Time: {timestamp.now() - start_time} s)")
-
-        else:
-            source_data_dir = expected_source_dir
+        mouse_temporary_data_folder = master_temporary_folder / mouse
+        mouse_temporary_data_folder.mkdir(exist_ok=True, parents=True)
 
         # Prepare folder where results will be saved:
-        processed_data_dir = final_data_loc / f"{mouse}"
-        processed_data_dir.mkdir(exist_ok=True, parents=True)
-        logger.info(f"processing data from {source_data_dir}")
+        mouse_processed_data_dir = final_data_loc / f"{mouse}"
+        mouse_processed_data_dir.mkdir(exist_ok=True, parents=True)
+        logger.info(f"processing data from {raw_data_location}. Preprocessed data in {mouse_temporary_data_folder}. Final data in {mouse_processed_data_dir}")
+
 
         # custom class to simplify parsing of info from oephys data folder
-        oephys_data = OEPhysDataFolder(source_data_dir) if not debug_mode else None
+        oephys_data = OEPhysDataFolder(raw_data_location) if not debug_mode else None
 
         for current_stream in ap_stream_names:
-            processed_stream_folder = processed_data_dir / current_stream
-            processed_stream_folder.mkdir(exist_ok=True, parents=True)
-            logger.info(f"Processing stream {current_stream}. Data saved to {processed_stream_folder}")
+            # temporary folder for the current stream:
+            stream_temporary_data_folder = mouse_temporary_data_folder / current_stream
+            stream_temporary_data_folder.mkdir(exist_ok=True, parents=True)
+
+            # Data folder for the current stream:
+            stream_final_data_folder = mouse_processed_data_dir / current_stream
+            stream_final_data_folder.mkdir(exist_ok=True, parents=True)
+
+            logger.info(f"Processing stream {current_stream}. Final data will be saved to {stream_final_data_folder}")
 
             # standard preprocessing pipeline:
             if "zarr" in data_location.name:
@@ -116,11 +124,11 @@ if __name__ == "__main__":
 
             # standard filtering pipeline:
             # Export to zarr array only if it does not exist:
-            preprocessed_zarr_path = source_data_dir / f"{current_stream}_preprocessed.zarr"
+            preprocessed_zarr_path = stream_temporary_data_folder / f"{current_stream}_preprocessed.zarr"
 
             if not preprocessed_zarr_path.exists():
                 # remove laser artifacts:
-                if remove_laser_artifacts and not debug_mode:
+                if remove_laser_artifacts and not debug_mode and not test_on_subset:
                     logger.info(f"Removing laser artifacts from {current_stream}...")
                     # read laser onsets in NPX indexing from oephys data (takes care of barcode alignment internally):
                     laser_onset_idxs = find_laser_onsets_npx_idxs(oephys_data, current_stream)
@@ -129,17 +137,20 @@ if __name__ == "__main__":
                 else:
                     zeroed_extractor = oephys_extractor
 
-                preprocessed_interface = standard_preprocessing(zeroed_extractor)
+                if test_on_subset:
+                    end_frame = int(n_seconds_subset * zeroed_extractor.get_sampling_frequency())
+                    zeroed_extractor = zeroed_extractor.frame_slice(start_frame, end_frame)
 
+                preprocessed_interface = standard_preprocessing(zeroed_extractor)
 
                 if drift_correction_spikeinterface:
                     # drift correction in spikeinterface:
                     logger.info(f"Drift correction for {current_stream}...")
                     preprocessed_interface = st.correct_motion(recording=preprocessed_interface, 
-                                                            preset="kilosort_like", 
-                                                            folder=processed_stream_folder)
+                                                               preset="kilosort_like", 
+                                                               folder=stream_temporary_data_folder)  # TODO check what is saved here
 
-                figures_folder = processed_stream_folder / f"ephys_processing_figs"
+                figures_folder = stream_final_data_folder / f"ephys_processing_figs"
                 figures_folder.mkdir(exist_ok=True, parents=True)
 
                 # make all diagnostic plots:
@@ -148,34 +159,41 @@ if __name__ == "__main__":
                                         stream_name=current_stream
                                         )
 
-                if remove_laser_artifacts and not debug_mode:
+                if remove_laser_artifacts and not debug_mode and not test_on_subset:
                     show_laser_trigger_preprost(oephys_extractor, preprocessed_interface, laser_onset_idxs, 
                                                 n_to_take=200, saving_path=figures_folder / f"laser_trigger_preprost_{current_stream}.png")
                 
 
                 # save preprocessed data to zarr:
+                logger.info(f"Saving preprocessed trace to {preprocessed_zarr_path}...")
                 compressor = numcodecs.Blosc(cname="zstd", clevel=5, shuffle=numcodecs.Blosc.BITSHUFFLE)
-                recording_saved = preprocessed_interface.save_to_zarr(folder = preprocessed_zarr_path)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    recording_saved = preprocessed_interface.save_to_zarr(folder = preprocessed_zarr_path, **job_kwargs)
 
-                logger.info(f"Preprocessing complete for {current_stream}. Data saved to {processed_stream_folder}")
+                logger.info(f"Preprocessing complete for {current_stream}. Data saved to {stream_final_data_folder}")
             else:
                 logger.info(f"Preprocessed zarr file already exists at {preprocessed_zarr_path}; loading...")
                 recording_saved = read_zarr(preprocessed_zarr_path)
 
-            sorting_ks4 = call_ks(recording_saved, 
-                    current_stream, 
-                    processed_stream_folder, 
-                    callKSfromSI=callKSfromSI, 
-                    remove_binary=True, 
-                    drift_correction=True)
-            
-            compute_stats(processed_stream_folder, sorting_ks4, recording_saved, **job_kwargs)
+                if test_on_subset:
+                    end_frame = int(n_seconds_subset * recording_saved.get_sampling_frequency())
+                    recording_saved = recording_saved.frame_slice(start_frame, end_frame)
 
-            # plt.close('all')
+            sorting_ks4 = call_ks(recording_saved, 
+                                  current_stream, 
+                                  stream_final_data_folder, 
+                                  callKSfromSI=callKSfromSI, 
+                                  remove_binary=True, 
+                                  drift_correction=True,
+                                  n_jobs=job_kwargs["n_jobs"])
+            
+            # compute_stats(stream_final_data_folder, sorting_ks4, recording_saved, **job_kwargs)
+
 
         if not debug_mode:
-            print(f"Cleaning up temporary folder {source_data_dir}")
-            shutil.rmtree(source_data_dir)
+            print(f"Cleaning up temporary folder {mouse_temporary_data_folder}")
+            shutil.rmtree(mouse_temporary_data_folder)
             print("Temporary folder cleaned up.")
 
 # %%
