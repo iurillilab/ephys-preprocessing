@@ -5,7 +5,7 @@
 # Parameters for running the script:
 test_mode = True  # if true, find folders to analyze but then use test recording
 source_dir = r"N:\SNeuroBiology_shared\P07_PREY_HUNTING_YE\e01_ephys _recordings"
-test_rec_tuple = (r"D:\temp_processing\2024-12-18_14-52-41",
+test_rec_tuple = (r"D:\luigi\mouse_data_electrode_tips\2024-12-18_14-52-41",
                     "Record Node 111#Neuropix-PXI-110.ProbeA")
 main_working_dir = r"D:\temp_processing"  # Local disk location to temporarily move files from the NAS
 
@@ -24,6 +24,8 @@ from spikeinterface.extractors import OpenEphysBinaryRecordingExtractor
 import spikeinterface.preprocessing as spre
 from spikeinterface import aggregate_channels
 from spikeinterface.core import concatenate_recordings
+from spikeinterface import create_sorting_analyzer
+
 import os
 import shutil
 import time
@@ -32,6 +34,7 @@ source_dir = Path(source_dir)
 main_working_dir = Path(main_working_dir)
 test_rec_tuple = (Path(test_rec_tuple[0]), test_rec_tuple[1])
 
+assert test_rec_tuple[0].exists(), f"Test recording {test_rec_tuple[0]} does not exist."
 
 
 def get_stream_name(folder):
@@ -62,6 +65,7 @@ def copy_folder(src, dst):
 def get_job_kwargs(chunk_duration="1s", progress_bar=True):
     return dict(n_jobs=os.cpu_count() // 2,  # physical cores hald of virtual total
                 progress_bar=progress_bar, 
+                # backend="loky",
                 chunk_duration=chunk_duration)
 
 
@@ -144,7 +148,7 @@ def standard_preprocessing(recording_extractor):
     recording = spre.phase_shift(recording) #lazy
     bad_channel_ids, _ = spre.detect_bad_channels(recording=recording)  
     # recording = recording.remove_channels(remove_channel_ids=bad_channel_ids)  # could be interpolated instead, but why?
-    recording_clean = spre.interpolate_bad_channels(recording_raw, bad_channel_ids=bad_channel_ids)
+    recording_clean = spre.interpolate_bad_channels(recording, bad_channel_ids=bad_channel_ids)
 
     # split in groups and apply spatial filtering, then reaggregate. KS4 can now handle multiple shanks
     if recording.get_channel_groups().max() > 1:
@@ -158,12 +162,80 @@ def standard_preprocessing(recording_extractor):
 
 def load_data_from_folder(folder, stream_name):
     """Load data from a folder using OpenEphysBinaryRecordingExtractor."""
-    if isinstance(folder, str | Path):
+    if isinstance(folder, str) or isinstance(folder, Path):
         # If a single folder is provided, use it directly
         folder = [folder]
     return concatenate_recordings(
                 [OpenEphysBinaryRecordingExtractor(f, stream_name=stream_name) for f in folder]
             )
+
+
+def compute_stats(sorting_data_folder, sorter_object, recording, logger=None, **job_kwargs):
+    """Compute stats for a given sorting data folder and sorter object."""
+     # first fix the params.py file saved by KS
+    diagnostics_message_streamer = logger.info if logger is not None else print
+
+    found_paths = []
+    found_paths = sorting_data_folder.rglob("params.py")
+    # search_files(ks_folder, "params.py")
+    for file_path in found_paths:   
+        print(file_path)
+        sortinganalyzerfolder = file_path.parent / "analyser"
+
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        
+        # Todo understand this mod here:
+        for i, line in enumerate(lines):
+            if "class numpy.int16" in line:
+                print(lines[i])
+                lines[i] = "dtype = '<class int16>'\n"  
+                break
+        with open(file_path, 'w') as file:
+            file.writelines(lines)
+        print("params.py file updated successfully.")
+
+        # run the analyzer
+        analyzer = create_sorting_analyzer(
+            sorting=sorter_object,
+            recording=recording,
+            folder=sortinganalyzerfolder,
+            format="binary_folder",
+            sparse=True,
+            overwrite=True
+        )
+
+        
+        diagnostics_message_streamer("compute random spikes...")
+        analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500) #parent extension
+        diagnostics_message_streamer("compute waveforms...")
+        analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0, **job_kwargs)
+        diagnostics_message_streamer("compute templates...")
+        analyzer.compute("templates", operators=["average", "median", "std"])
+        print(analyzer)
+
+        si.compute_noise_levels(analyzer)   # return_scaled=True  #???
+        si.compute_spike_amplitudes(analyzer)
+
+        diagnostics_message_streamer("compute quality metrics...")
+        start_time = time.time()
+        dqm_params = si.get_default_qm_params()
+        qms = analyzer.compute(input={"principal_components": dict(n_components=3, mode="by_channel_local"),
+                                        "quality_metrics": dict(skip_pc_metrics=False, qm_params=dqm_params)}, 
+                                verbose=True, **job_kwargs)
+        qms = analyzer.get_extension(extension_name="quality_metrics")
+        metrics = qms.get_data()
+        print(metrics.columns)
+        assert 'isolation_distance' in metrics.columns
+        elapsed_time = time.time() - start_time
+        diagnostics_message_streamer(f"Elapsed time: {elapsed_time} seconds")
+
+        _ = analyzer.compute('correlograms')
+
+        # # the export process is fast because everything is pre-computed
+        export_to_phy(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "phy", copy_binary=False)
+        export_report(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "report")
+
 
 recording_extractor = load_data_from_folder(local_folder, stream_name=stream_name)
 
@@ -172,9 +244,12 @@ job_kwargs = get_job_kwargs(chunk_duration="1s", progress_bar=True)
 preprocessed = standard_preprocessing(recording_extractor)
 
 # %%
+
+
 working_folder_path = local_folder / "kilosort4"
 if working_folder_path.exists():
     # remove the folder if it exists
+    print(f"Removing existing working folder: {working_folder_path}")
     shutil.rmtree(working_folder_path)
 
 working_folder_path.mkdir(parents=True, exist_ok=True)
@@ -188,16 +263,7 @@ sorting_ks4 = ss.run_sorter_by_property(sorter_name="kilosort4",
                                                 verbose=True)
 
 
+compute_stats(working_folder_path, sorting_ks4, preprocessed, **job_kwargs)
+
 
 # %%
-# NOTE: Data will be saved as np.int16 by default since that is the standard
-#       for ephys data. If you need a different data type for whatever reason
-#       such as `np.uint16`, be sure to update this.
-dtype = np.int16
-filename, N, c, s, fs, probe_path = io.spikeinterface_to_binary(
-    recording, DATA_DIRECTORY, data_name='data.bin', dtype=dtype,
-    chunksize=60000, export_probe=True, probe_name='probe.prb'
-    )
-
-# %%
-?ss.run_sorter_by_property
