@@ -20,12 +20,23 @@ from spikeinterface import create_sorting_analyzer
 import spikeinterface.full as si
 import spikeinterface.curation as scur
 
+import torch
+
+print("CUDA available:", torch.cuda.is_available())
+print("CUDA device count:", torch.cuda.device_count() if torch.cuda.is_available() else 0)
+
+print("MPS available:", torch.backends.mps.is_available()) 
+print("MPS built:", torch.backends.mps.is_built())
+
+
 n_jobs = os.cpu_count() // 2
 
 # Example paths for testing
 EXAMPLE_PATHS = {
-    'source_dir':  Path('/mnt/d/temp_processing'),  #  Path("/Volumes/Extreme SSD/test_rec"), # Path("/Volumes/Extreme SSD/test_yadu_rec"),
-    'working_dir': Path('/mnt/d/temp_processing'), # Path("/Volumes/Extreme SSD/test_rec"),  # test_yadu_rec/M29
+    # 'source_dir':  Path('/mnt/d/temp_processing'),
+    # 'working_dir': Path('/mnt/d/temp_processing')
+    'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
+    'working_dir': None,
     'test_recording': (
         Path("/Volumes/Extreme SSD/2024-11-13_14-39-11"),
         "Record Node 111#Neuropix-PXI-110.ProbeA"
@@ -87,7 +98,8 @@ def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordin
         folder=sortinganalyzerfolder,
         format="binary_folder",
         sparse=True,
-        overwrite=True
+        overwrite=True,
+        n_jobs=n_jobs
     )
 
     job_kwargs = dict(n_jobs=n_jobs, chunk_duration="1s", progress_bar=True)
@@ -153,12 +165,11 @@ class RecordingProcessor:
     
     def try_load_sorter(self) -> Optional[si.BaseSorting]:
         """Try to load the sorter results, return None if it fails."""
-        try:
-            return si.read_kilosort(self.kilosort_folder, keep_good_only=False)
-        except Exception as e:
-            if self.dry_run:
-                print(f"[DRY RUN] Failed to load sorter: {e}")
-            return None
+        return si.read_kilosort(self.kilosort_folder / "sorter_output", keep_good_only=False)
+        #except Exception as e:
+        #    if self.dry_run:
+        #        print(f"[DRY RUN] Failed to load sorter: {e}")
+        #    return None
     
     def try_load_analyzer(self) -> Optional[si.SortingAnalyzer]:
         """Try to load the analyzer results, return None if it fails."""
@@ -216,7 +227,8 @@ def process_recording(processor: RecordingProcessor) -> None:
                 folder=processor.kilosort_folder,
                 remove_existing_folder=processor.overwrite,
                 n_jobs=n_jobs,
-                verbose=True
+                verbose=True,
+                # torch_device="mps"
             )
             sorting = scur.remove_excess_spikes(sorting, recording)
             print(f"Sorting duration: {_n_seconds_to_formatted_time(time.time()-sorting_t_start)}")
@@ -293,7 +305,7 @@ def main():
         EXAMPLE_PATHS['source_dir'],
         EXAMPLE_PATHS['working_dir'],
         dry_run=False,
-        overwrite=True
+        overwrite=False
     )
     print(processors)
     for processor in processors:
