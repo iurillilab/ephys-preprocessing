@@ -3,17 +3,22 @@
 # %%
 # ========================================================================
 # Parameters for running the script:
-test_mode = True  # if true, find folders to analyze but then use test recording
+
+
+
+test_mode = False  # if true, find folders to analyze but then use test recording
 source_dir = r"N:\SNeuroBiology_shared\P07_PREY_HUNTING_YE\e01_ephys _recordings"
 test_rec_tuple = (r"D:\luigi\mouse_data_electrode_tips\2024-12-18_14-52-41",
                     "Record Node 111#Neuropix-PXI-110.ProbeA")
 main_working_dir = r"D:\temp_processing"  # Local disk location to temporarily move files from the NAS
+overwrite_runs = True  # if true, overwrite existing kilosort runs
 
+# %%
 
 # ========================================================================
 # Imports and functions:
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from pprint import pprint
 import numpy as np
 from tqdm import trange
@@ -25,10 +30,49 @@ import spikeinterface.preprocessing as spre
 from spikeinterface import aggregate_channels
 from spikeinterface.core import concatenate_recordings
 from spikeinterface import create_sorting_analyzer
+import spikeinterface.full as si
+import spikeinterface.curation as scur
 
 import os
+import subprocess
 import shutil
 import time
+import traceback
+
+
+si.set_global_job_kwargs(n_jobs=os.cpu_count() // 2,  # physical cores hald of virtual total
+                         progress_bar=True)  # chunk_duration="1s"
+print(f"Using {os.cpu_count() // 2} cores for parallel processing.")
+
+# if os is linux, change root disks like this: D:\ to /mnt/d/, and N:\ to /mnt/nas/
+def _convert_windows_path_to_linux(path_str: str) -> Path:
+    SPECIAL_DRIVE_MAP = {'N': Path('/mnt/nas'), 'D': Path('/mnt/d')}  # drives that are not just lowercase letter
+    # mount just in case the nas:
+    if not SPECIAL_DRIVE_MAP['N'].exists():
+        subprocess.run("sudo mount -t drvfs \\\\10.231.128.151\\SystemsNeuroBiology /mnt/nas")
+    if os.name != 'posix' or str(path_str).startswith('/mnt/'):
+        return Path(path_str)
+    p = PureWindowsPath(path_str)
+    drive_letter = p.drive.rstrip(':').upper()
+    return SPECIAL_DRIVE_MAP.get(drive_letter, Path(f"/mnt/{drive_letter.lower()}")).joinpath(*p.parts[1:])
+
+def _n_seconds_to_formatted_time(n_seconds):
+    """Convert seconds to formatted time string."""
+    n_seconds = int(n_seconds)
+    hours, remainder = divmod(n_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+source_dir = _convert_windows_path_to_linux(source_dir)
+test_rec_tuple = (Path(_convert_windows_path_to_linux(test_rec_tuple[0])), test_rec_tuple[1])
+main_working_dir = _convert_windows_path_to_linux(main_working_dir)
+assert main_working_dir.exists(), f"Main working directory {main_working_dir} does not exist."
+assert source_dir.exists(), f"Source directory {source_dir} does not exist."
+if not test_rec_tuple[0].exists():
+    print(f"Test recording {test_rec_tuple[0]} does not exist, won't be able to run test mode.")
+
+# %%
+
 
 source_dir = Path(source_dir)
 main_working_dir = Path(main_working_dir)
@@ -41,13 +85,20 @@ def get_stream_name(folder):
     """Matching file pattern to get stream name. Currently taylored to find 
     first NPX2 recording, has to change for multiprobe/NPX1"""
 
-    STREAM_NAME_MATCH = "Record Node *\\experiment*\\recording*\\continuous\\Neuropix-PXI-*.Probe*"
-    stream_path = folder.glob(STREAM_NAME_MATCH)
-    stream_path = next(stream_path)
-    record_node = str(stream_path).split("Record Node ")[1].split("\\")[0]
+    STREAM_NAME_MATCH = "Record Node */experiment*/recording*/continuous/Neuropix-PXI-*.Probe*"
+    #stream_path = 
+    #print(stream_path, type(stream_path))
+    try:
+        stream_path = next(folder.glob(STREAM_NAME_MATCH))
+    except StopIteration:
+        raise ValueError(f"No stream found in {folder} matching {STREAM_NAME_MATCH}")
+    
+    parts = stream_path.parts
+    record_node = next(part for part in parts if part.startswith("Record Node "))
+    record_node_number = record_node.split("Record Node ")[1]
     probe = stream_path.name
 
-    return f"Record Node {record_node}#{probe}"
+    return f"Record Node {record_node_number}#{probe}"
 
 def copy_folder(src, dst):
     """Copy a folder to a new location, creating the destination folder if it doesn't exist.
@@ -97,12 +148,11 @@ for mouse_id, mouse_path in list(mouse_paths.items())[:1]:
 
     for timestamp_folder in timestamp_folders:
         try:
-            # Check if the folder contains a recording
             stream_name = get_stream_name(timestamp_folder)
-            recording_raw = OpenEphysBinaryRecordingExtractor(timestamp_folder, stream_name=stream_name)
-            # recording_raw = concatenate_recordings([recording_raw])
+            recording_raw = OpenEphysBinaryRecordingExtractor(timestamp_folder, stream_name=stream_name)              
         except Exception as e:
-            print(f"Error processing {timestamp_folder}: {e}; \n is this a valid OpenEphys folder?")
+            print(f"Error processing {timestamp_folder}: {repr(e)} ({type(e)}). Is this a valid OpenEphys folder?")
+            traceback.print_exc()
             continue
 
         # put together folders from paired recordings:
@@ -115,27 +165,52 @@ for mouse_id, mouse_path in list(mouse_paths.items())[:1]:
             # If the folder is not paired, add it to the dictionary
             pooled_dirs_to_process[timestamp_folder.name] = [timestamp_folder, stream_name]
 
+    
+
 print(f"Found {len(pooled_dirs_to_process)} total folders to process:")
 pprint(pooled_dirs_to_process)
+
+# %%
+def get_stream_name(folder):
+    """Matching file pattern to get stream name. Currently taylored to find 
+    first NPX2 recording, has to change for multiprobe/NPX1"""
+
+    STREAM_NAME_MATCH = "Record Node */experiment*/recording*/continuous/Neuropix-PXI-*.Probe*"
+    #stream_path = 
+    #print(stream_path, type(stream_path))
+    #try:
+    stream_path = next(folder.glob(STREAM_NAME_MATCH))
+    #except StopIteration:
+    # raise ValueError(f"No stream found in {folder} matching {STREAM_NAME_MATCH}")
+    
+    parts = stream_path.parts
+    record_node = next(part for part in parts if part.startswith("Record Node "))
+    record_node_number = record_node.split("Record Node ")[1]
+    probe = stream_path.name
+
+    return f"Record Node {record_node_number}#{probe}"
+
+# %%
 
 # ========================================================================
 # Process all folders:
 if test_mode:
-    pooled_dirs_to_process = [test_rec_tuple]
+    pooled_dirs_to_process = dict(test=test_rec_tuple)
     print(f"Test mode: using {test_rec_tuple[0]} as test recording.")
 
-
-
-# %%
-
-folder, stream_name = pooled_dirs_to_process[0]
-print(f"Processing {folder} with stream name {stream_name}")
+#
+# for folder, stream_name in pooled_dirs_to_process.items():
+folder_name, (folder_list, stream_name) = list(pooled_dirs_to_process.items())[1]
+assert isinstance(folder_list, Path), "List processing not implemented yet"
+folder = folder_list
+global_t_start = time.time()
+print(f"Processing {folder_name} with stream name {stream_name}")
 
 start_t = time.time()
 if len(list((main_working_dir / folder.name).rglob("*.dat"))) == 0:
     print(f"Copying {folder} to {main_working_dir}")
     local_folder = copy_folder(folder, main_working_dir)
-    print(f"Copying took {time.time()-start_t:.2f} seconds")
+    print(f"Copying took {_n_seconds_to_formatted_time(time.time()-start_t)}")
 else:
     local_folder = main_working_dir / folder.name
     print(f"Already copied {folder} to {local_folder}")
@@ -148,7 +223,7 @@ def standard_preprocessing(recording_extractor):
     recording = spre.phase_shift(recording) #lazy
     bad_channel_ids, _ = spre.detect_bad_channels(recording=recording)  
     # recording = recording.remove_channels(remove_channel_ids=bad_channel_ids)  # could be interpolated instead, but why?
-    recording_clean = spre.interpolate_bad_channels(recording, bad_channel_ids=bad_channel_ids)
+    recording = spre.interpolate_bad_channels(recording, bad_channel_ids=bad_channel_ids)
 
     # split in groups and apply spatial filtering, then reaggregate. KS4 can now handle multiple shanks
     if recording.get_channel_groups().max() > 1:
@@ -170,7 +245,7 @@ def load_data_from_folder(folder, stream_name):
             )
 
 
-def compute_stats(sorting_data_folder, sorter_object, recording, logger=None, **job_kwargs):
+def compute_stats(sorting_data_folder, sorter_object, recording, logger=None): #, **job_kwargs):
     """Compute stats for a given sorting data folder and sorter object."""
      # first fix the params.py file saved by KS
     diagnostics_message_streamer = logger.info if logger is not None else print
@@ -209,7 +284,7 @@ def compute_stats(sorting_data_folder, sorter_object, recording, logger=None, **
         diagnostics_message_streamer("compute random spikes...")
         analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500) #parent extension
         diagnostics_message_streamer("compute waveforms...")
-        analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0, **job_kwargs)
+        analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0) #, **job_kwargs)
         diagnostics_message_streamer("compute templates...")
         analyzer.compute("templates", operators=["average", "median", "std"])
         print(analyzer)
@@ -220,9 +295,23 @@ def compute_stats(sorting_data_folder, sorter_object, recording, logger=None, **
         diagnostics_message_streamer("compute quality metrics...")
         start_time = time.time()
         dqm_params = si.get_default_qm_params()
+
+        #######
+        # Looking at bottleneck
+        sparsity = analyzer.sparsity
+        if sparsity is None:
+            num_channels = recording.get_num_channels()
+            sparse_channels_indices = {unit_id: np.arange(num_channels) for unit_id in sorting_analyzer.unit_ids}
+            max_channels_per_template = num_channels
+        else:
+            sparse_channels_indices = sparsity.unit_id_to_channel_indices
+            max_channels_per_template = max([chan_inds.size for chan_inds in sparse_channels_indices.values()])
+        print(f"Max channels per template: {max_channels_per_template}")
+        #######
+
         qms = analyzer.compute(input={"principal_components": dict(n_components=3, mode="by_channel_local"),
-                                        "quality_metrics": dict(skip_pc_metrics=False, qm_params=dqm_params)}, 
-                                verbose=True, **job_kwargs)
+                                      "quality_metrics": dict(skip_pc_metrics=False, qm_params=dqm_params)}, 
+                                verbose=True) #, **job_kwargs)
         qms = analyzer.get_extension(extension_name="quality_metrics")
         metrics = qms.get_data()
         print(metrics.columns)
@@ -233,37 +322,66 @@ def compute_stats(sorting_data_folder, sorter_object, recording, logger=None, **
         _ = analyzer.compute('correlograms')
 
         # # the export process is fast because everything is pre-computed
-        export_to_phy(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "phy", copy_binary=False)
-        export_report(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "report")
+        # export_to_phy(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "phy", copy_binary=False)
+        # export_report(sorting_analyzer=analyzer, output_folder=sortinganalyzerfolder / "report")
 
 
-recording_extractor = load_data_from_folder(local_folder, stream_name=stream_name)
-
-
-job_kwargs = get_job_kwargs(chunk_duration="1s", progress_bar=True)
-preprocessed = standard_preprocessing(recording_extractor)
-
-# %%
-
-
+# understand how much stuff there is to be done:
+sorting_done = False
+stats_done = False
 working_folder_path = local_folder / "kilosort4"
-if working_folder_path.exists():
+
+# try:
+#     si.read_sorter_folder(working_folder_path / "0", format="kilosort4")
+#     sorting_done = True
+# except Exception as e:
+#     print(f"Error reading sorter folder: {e}")
+
+# try:
+#     si.load_sorting_analyzer(working_folder_path / "analyser", format="binary_folder")
+#     stats_done = True
+# except Exception as e:
+#     print(f"Error reading stats folder: {e}")
+
+if overwrite_runs:
+    sorting_done = False
+    stats_done = False
+
+if working_folder_path.exists() and overwrite_runs:
     # remove the folder if it exists
     print(f"Removing existing working folder: {working_folder_path}")
     shutil.rmtree(working_folder_path)
 
+# elif working_folder_path.exists():
+    # si.read_sorter_folder(working_folder_path / "0", format="kilosort4")
+
+print(f"Loading data from {local_folder} with stream name {stream_name}")
+recording_extractor = load_data_from_folder(local_folder, stream_name=stream_name)
+
+
+# job_kwargs = dict(n_jobs=os.cpu_count() // 2)
+recording_extractor = standard_preprocessing(recording_extractor)
+
+# %%
+
 working_folder_path.mkdir(parents=True, exist_ok=True)
 
+sorting_t_start = time.time()
 sorting_ks4 = ss.run_sorter_by_property(sorter_name="kilosort4", 
-                                                recording=preprocessed, 
+                                                recording=recording_extractor, 
                                                 folder=working_folder_path, 
                                                 grouping_property="group", 
-                                                engine="joblib",
-                                                engine_kwargs=job_kwargs,
+                                                n_jobs=14,
+                                                # engine="joblib",
+                                                #engine_kwargs=job_kwargs,
                                                 verbose=True)
+sorting_ks4 = scur.remove_excess_spikes(sorting_ks4, recording_extractor)
+print(f"Sorting duration: {_n_seconds_to_formatted_time(time.time()-start_t)}")
 
+stats_t_start = time.time()
+# compute stats
+compute_stats(working_folder_path, sorting_ks4, recording_extractor) # , **job_kwargs)
+print(f"Stats duration: {_n_seconds_to_formatted_time(time.time()-stats_t_start)}")
 
-compute_stats(working_folder_path, sorting_ks4, preprocessed, **job_kwargs)
-
-
+print(f"Total duration: {_n_seconds_to_formatted_time(time.time()-global_t_start)}")
 # %%
