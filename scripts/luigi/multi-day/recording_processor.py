@@ -24,8 +24,8 @@ n_jobs = os.cpu_count() // 2
 
 # Example paths for testing
 EXAMPLE_PATHS = {
-    'source_dir': Path("/Volumes/Extreme SSD/test_rec"), # Path("/Volumes/Extreme SSD/test_yadu_rec"),
-    'working_dir': None, # Path("/Volumes/Extreme SSD/test_rec"),  # test_yadu_rec/M29
+    'source_dir':  Path('/mnt/d/temp_processing'),  #  Path("/Volumes/Extreme SSD/test_rec"), # Path("/Volumes/Extreme SSD/test_yadu_rec"),
+    'working_dir': Path('/mnt/d/temp_processing'), # Path("/Volumes/Extreme SSD/test_rec"),  # test_yadu_rec/M29
     'test_recording': (
         Path("/Volumes/Extreme SSD/2024-11-13_14-39-11"),
         "Record Node 111#Neuropix-PXI-110.ProbeA"
@@ -299,7 +299,6 @@ def main():
     for processor in processors:
         process_recording(processor)
 
-assert Path("/Volumes/Extreme SSD/test_yadu_rec/M29/2025-05-09_12-04-15/kilosort4").exists()
 # assert Path("/Volumes/Extreme SSD/test_yadu_rec/M29/2024-11-13_14-39-11/kilosort4/0").exists()
 if __name__ == "__main__":
     main() 
