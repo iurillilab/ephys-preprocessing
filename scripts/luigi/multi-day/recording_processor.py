@@ -123,6 +123,7 @@ class RecordingProcessor:
     stream_name: str
     is_split_recording: bool = False
     dry_run: bool = False
+    overwrite: bool = False
     
     def __post_init__(self):
         self.source_path = Path(self.source_path)
@@ -179,7 +180,7 @@ class RecordingProcessor:
         self.local_folder = copy_folder(self.source_path, self.working_dir)
         print(f"Copying took {_n_seconds_to_formatted_time(time.time()-start_t)}")
 
-def process_recording(processor: RecordingProcessor, overwrite: bool = False) -> None:
+def process_recording(processor: RecordingProcessor) -> None:
     """Process a single recording."""
     print(f"\nProcessing {processor.source_path.name} with stream name {processor.stream_name}")
     global_t_start = time.time()
@@ -200,7 +201,7 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
     # Step 2: Try to load or run spike sorting
     sorting = processor.try_load_sorter()
     print(f"Sorting: \n{sorting}")
-    if sorting is None or overwrite:
+    if sorting is None or processor.overwrite:
         if processor.dry_run:
             print("[DRY RUN] Would run spike sorting")
         else:
@@ -209,19 +210,11 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
             recording = standard_preprocessing(recording)
             processor.kilosort_folder.mkdir(parents=True, exist_ok=True)
             
-            # sorting = ss.run_sorter_by_property(
-            #     sorter_name="kilosort4",
-            #     recording=recording,
-            #     folder=processor.kilosort_folder,
-            #     # grouping_property="group",
-            #     n_jobs=n_jobs,
-            #     verbose=True
-            # )
             sorting = ss.run_sorter(
                 sorter_name="kilosort4",
                 recording=recording,
                 folder=processor.kilosort_folder,
-                # grouping_property="group",
+                remove_existing_folder=processor.overwrite,
                 n_jobs=n_jobs,
                 verbose=True
             )
@@ -232,7 +225,7 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
     
     # Step 3: Try to load or compute metrics
     analyzer = processor.try_load_analyzer()
-    if analyzer is None or overwrite:
+    if analyzer is None or processor.overwrite:
         if processor.dry_run:
             print("[DRY RUN] Would compute metrics")
         else:
@@ -246,7 +239,7 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
     if not processor.dry_run:
         print(f"Total duration: {_n_seconds_to_formatted_time(time.time()-global_t_start)}")
 
-def find_recordings_to_process(source_dir: Path, working_dir: Path, dry_run: bool = False) -> List[RecordingProcessor]:
+def find_recordings_to_process(source_dir: Path, working_dir: Path, dry_run: bool = False, overwrite: bool = False) -> List[RecordingProcessor]:
     """Find all recordings to process."""
     processors = []
     timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
@@ -271,14 +264,16 @@ def find_recordings_to_process(source_dir: Path, working_dir: Path, dry_run: boo
                         working_dir=working_dir,
                         stream_name=stream_name,
                         is_split_recording=True,
-                        dry_run=dry_run
+                        dry_run=dry_run,
+                        overwrite=overwrite
                     ))
             else:
                 processors.append(RecordingProcessor(
                     source_path=timestamp_folder,
                     working_dir=working_dir,
                     stream_name=stream_name,
-                    dry_run=dry_run
+                    dry_run=dry_run,
+                    overwrite=overwrite
                 ))
         except Exception as e:
             print(f"Error processing {timestamp_folder}: {repr(e)} ({type(e)})")
@@ -297,7 +292,8 @@ def main():
     processors = find_recordings_to_process(
         EXAMPLE_PATHS['source_dir'],
         EXAMPLE_PATHS['working_dir'],
-        dry_run=False
+        dry_run=False,
+        overwrite=True
     )
     print(processors)
     for processor in processors:
