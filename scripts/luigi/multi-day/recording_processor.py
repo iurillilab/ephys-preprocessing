@@ -20,10 +20,12 @@ from spikeinterface import create_sorting_analyzer
 import spikeinterface.full as si
 import spikeinterface.curation as scur
 
+n_jobs = os.cpu_count() // 2
+
 # Example paths for testing
 EXAMPLE_PATHS = {
-    'source_dir': Path("/Volumes/Extreme SSD/test_yadu_rec"),
-    'working_dir': Path("/Volumes/Extreme SSD/test_yadu_rec/M29"),
+    'source_dir': Path("/Volumes/Extreme SSD/test_rec"), # Path("/Volumes/Extreme SSD/test_yadu_rec"),
+    'working_dir': None, # Path("/Volumes/Extreme SSD/test_rec"),  # test_yadu_rec/M29
     'test_recording': (
         Path("/Volumes/Extreme SSD/2024-11-13_14-39-11"),
         "Record Node 111#Neuropix-PXI-110.ProbeA"
@@ -77,18 +79,55 @@ def standard_preprocessing(recording_extractor: OpenEphysBinaryRecordingExtracto
 
     return recording_hpsf
 
+def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordingExtractor, sortinganalyzerfolder: Path) -> None:
+    # run the analyzer
+    analyzer = create_sorting_analyzer(
+        sorting=sorting_ks,
+        recording=recording,
+        folder=sortinganalyzerfolder,
+        format="binary_folder",
+        sparse=True,
+        overwrite=True
+    )
+
+    job_kwargs = dict(n_jobs=n_jobs, chunk_duration="1s", progress_bar=True)
+    print("compute random spikes...")
+    analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500)  # parent extension
+    print("compute waveforms...")
+    analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0, **job_kwargs)
+    print("compute templates...")
+    analyzer.compute("templates", operators=["average", "median", "std"])
+    print(analyzer)
+
+    si.compute_noise_levels(analyzer)   # return_scaled=True  #???
+    si.compute_spike_amplitudes(analyzer)
+
+    print("compute quality metrics...")
+    start_time = time.time()
+    dqm_params = si.get_default_qm_params()
+    qms = analyzer.compute(input={"principal_components": dict(n_components=3, mode="by_channel_local"),
+                                    "quality_metrics": dict(skip_pc_metrics=False, qm_params=dqm_params)}, 
+                            verbose=True, **job_kwargs)
+    qms = analyzer.get_extension(extension_name="quality_metrics")
+    metrics = qms.get_data()
+    print(metrics.columns)
+    assert 'isolation_distance' in metrics.columns
+    elapsed_time = time.time() - start_time
+    print(f"Elapsed time: {elapsed_time} seconds")
+
 @dataclass
 class RecordingProcessor:
     """Handles path management and processing state for a recording."""
     source_path: Path
-    working_dir: Path
+    working_dir: Optional[Path]
     stream_name: str
     is_split_recording: bool = False
     dry_run: bool = False
     
     def __post_init__(self):
         self.source_path = Path(self.source_path)
-        self.working_dir = Path(self.working_dir)
+        # If working_dir is None, use the parent directory of the source_path
+        self.working_dir = Path(self.working_dir) if self.working_dir is not None else self.source_path.parent
         self.local_folder = self.working_dir / self.source_path.name
         self.kilosort_folder = self.local_folder / "kilosort4"
         self.analyzer_folder = self.kilosort_folder / "analyser"
@@ -114,7 +153,7 @@ class RecordingProcessor:
     def try_load_sorter(self) -> Optional[si.BaseSorting]:
         """Try to load the sorter results, return None if it fails."""
         try:
-            return si.read_sorter_folder(self.kilosort_folder / "0")
+            return si.read_kilosort(self.kilosort_folder, keep_good_only=False)
         except Exception as e:
             if self.dry_run:
                 print(f"[DRY RUN] Failed to load sorter: {e}")
@@ -160,6 +199,7 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
     
     # Step 2: Try to load or run spike sorting
     sorting = processor.try_load_sorter()
+    print(f"Sorting: \n{sorting}")
     if sorting is None or overwrite:
         if processor.dry_run:
             print("[DRY RUN] Would run spike sorting")
@@ -169,12 +209,20 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
             recording = standard_preprocessing(recording)
             processor.kilosort_folder.mkdir(parents=True, exist_ok=True)
             
-            sorting = ss.run_sorter_by_property(
+            # sorting = ss.run_sorter_by_property(
+            #     sorter_name="kilosort4",
+            #     recording=recording,
+            #     folder=processor.kilosort_folder,
+            #     # grouping_property="group",
+            #     n_jobs=n_jobs,
+            #     verbose=True
+            # )
+            sorting = ss.run_sorter(
                 sorter_name="kilosort4",
                 recording=recording,
                 folder=processor.kilosort_folder,
-                grouping_property="group",
-                n_jobs=14,
+                # grouping_property="group",
+                n_jobs=n_jobs,
                 verbose=True
             )
             sorting = scur.remove_excess_spikes(sorting, recording)
@@ -190,7 +238,7 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
         else:
             print("Computing metrics...")
             stats_t_start = time.time()
-            compute_stats(processor.kilosort_folder, sorting, recording)
+            compute_stats(sorting, recording, processor.analyzer_folder)
             print(f"Stats duration: {_n_seconds_to_formatted_time(time.time()-stats_t_start)}")
     else:
         print("Found existing metrics")
@@ -201,66 +249,61 @@ def process_recording(processor: RecordingProcessor, overwrite: bool = False) ->
 def find_recordings_to_process(source_dir: Path, working_dir: Path, dry_run: bool = False) -> List[RecordingProcessor]:
     """Find all recordings to process."""
     processors = []
-    mouse_paths = {f.name: f for f in source_dir.glob("*M[0-9][0-9]")}
+    timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
     
-    for mouse_id, mouse_path in mouse_paths.items():
-        print(f"Searching {mouse_id}")
-        timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
-        
-        timestamp_folders = sorted(
-            folder for folder in mouse_path.rglob("*-*_*/")
-            if folder.is_dir() and timestamp_pattern.match(folder.name)
-        )
-        
-        for timestamp_folder in timestamp_folders:
-            try:
-                stream_name = get_stream_name(timestamp_folder)
-                if "split_" in timestamp_folder.parent.name:
-                    # For split recordings, create processor for parent folder
-                    parent_folder = timestamp_folder.parent
-                    if not any(p.source_path == parent_folder for p in processors):
-                        processors.append(RecordingProcessor(
-                            source_path=parent_folder,
-                            working_dir=working_dir,
-                            stream_name=stream_name,
-                            is_split_recording=True,
-                            dry_run=dry_run
-                        ))
-                else:
+    # Find all timestamp folders directly in source_dir and its subdirectories
+    timestamp_folders = sorted(
+        folder for folder in source_dir.rglob("*-*_*/")
+        if folder.is_dir() and timestamp_pattern.match(folder.name)
+    )
+    
+    print(f"Found {len(timestamp_folders)} timestamp folders to process")
+    
+    for timestamp_folder in timestamp_folders:
+        try:
+            stream_name = get_stream_name(timestamp_folder)
+            if "split_" in timestamp_folder.parent.name:
+                # For split recordings, create processor for parent folder
+                parent_folder = timestamp_folder.parent
+                if not any(p.source_path == parent_folder for p in processors):
                     processors.append(RecordingProcessor(
-                        source_path=timestamp_folder,
+                        source_path=parent_folder,
                         working_dir=working_dir,
                         stream_name=stream_name,
+                        is_split_recording=True,
                         dry_run=dry_run
                     ))
-            except Exception as e:
-                print(f"Error processing {timestamp_folder}: {repr(e)} ({type(e)})")
-                traceback.print_exc()
-                continue
+            else:
+                processors.append(RecordingProcessor(
+                    source_path=timestamp_folder,
+                    working_dir=working_dir,
+                    stream_name=stream_name,
+                    dry_run=dry_run
+                ))
+        except Exception as e:
+            print(f"Error processing {timestamp_folder}: {repr(e)} ({type(e)})")
+            traceback.print_exc()
+            continue
     
     return processors
 
 def main():
     """Example usage of the recording processor."""
+    print(EXAMPLE_PATHS)
     # Example with dry run
-    print("=== Dry Run Example ===")
-    test_processor = RecordingProcessor(
-        source_path=EXAMPLE_PATHS['test_recording'][0],
-        working_dir=EXAMPLE_PATHS['working_dir'],
-        stream_name=EXAMPLE_PATHS['test_recording'][1],
-        dry_run=True
-    )
-    process_recording(test_processor)
     
     # Example with real processing
     print("\n=== Real Processing Example ===")
     processors = find_recordings_to_process(
         EXAMPLE_PATHS['source_dir'],
         EXAMPLE_PATHS['working_dir'],
-        dry_run=True
+        dry_run=False
     )
+    print(processors)
     for processor in processors:
         process_recording(processor)
 
+assert Path("/Volumes/Extreme SSD/test_yadu_rec/M29/2025-05-09_12-04-15/kilosort4").exists()
+# assert Path("/Volumes/Extreme SSD/test_yadu_rec/M29/2024-11-13_14-39-11/kilosort4/0").exists()
 if __name__ == "__main__":
     main() 
