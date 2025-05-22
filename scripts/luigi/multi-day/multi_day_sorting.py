@@ -4,15 +4,15 @@
 # ========================================================================
 # Parameters for running the script:
 
-
-
 test_mode = False  # if true, find folders to analyze but then use test recording
-source_dir = r"N:\SNeuroBiology_shared\P07_PREY_HUNTING_YE\e01_ephys _recordings"
-test_rec_tuple = (r"D:\luigi\mouse_data_electrode_tips\2024-12-18_14-52-41",
-                    "Record Node 111#Neuropix-PXI-110.ProbeA")
-main_working_dir = r"D:\temp_processing"  # Local disk location to temporarily move files from the NAS
-overwrite_runs = True  # if true, overwrite existing kilosort runs
+# source_dir = r"N:\SNeuroBiology_shared\P07_PREY_HUNTING_YE\e01_ephys _recordings"
 
+# test_rec_tuple = (r"D:\luigi\mouse_data_electrode_tips\2024-12-18_14-52-41",
+#                    "Record Node 111#Neuropix-PXI-110.ProbeA")
+# main_working_dir = r"D:\temp_processing"  # Local disk location to temporarily move files from the NAS
+overwrite_runs = False  # if true, overwrite existing kilosort runs
+main_working_dir = Path("/Users/vigji/Desktop/temp_processing")
+main_working_dir.mkdir(parents=True, exist_ok=True)
 # %%
 
 # ========================================================================
@@ -38,6 +38,9 @@ import subprocess
 import shutil
 import time
 import traceback
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, Union
+from recording_processor import RecordingProcessor, find_recordings_to_process
 
 
 si.set_global_job_kwargs(n_jobs=os.cpu_count() // 2,  # physical cores hald of virtual total
@@ -106,7 +109,7 @@ def copy_folder(src, dst):
         src (str): Path to the source folder.
         dst (str): Path to the destination folder PARENT
     """
-    src, dts = Path(src), Path(dst)
+    src, dst = Path(src), Path(dst)
     dst = dst / src.name
     dst.mkdir(exist_ok=True, parents=True)
     shutil.copytree(src, dst, dirs_exist_ok=True)
@@ -385,3 +388,122 @@ print(f"Stats duration: {_n_seconds_to_formatted_time(time.time()-stats_t_start)
 
 print(f"Total duration: {_n_seconds_to_formatted_time(time.time()-global_t_start)}")
 # %%
+
+@dataclass
+class RecordingProcessor:
+    """Handles path management and processing state for a recording."""
+    source_path: Path
+    working_dir: Path
+    stream_name: str
+    is_split_recording: bool = False
+    
+    def __post_init__(self):
+        self.source_path = Path(self.source_path)
+        self.working_dir = Path(self.working_dir)
+        self.local_folder = self.working_dir / self.source_path.name
+        self.kilosort_folder = self.local_folder / "kilosort4"
+        self.analyzer_folder = self.kilosort_folder / "analyser"
+        
+    @property
+    def has_binary_data(self) -> bool:
+        """Check if binary data exists in working directory."""
+        return len(list(self.local_folder.rglob("*.dat"))) > 0
+    
+    @property
+    def has_sorting_results(self) -> bool:
+        """Check if sorting results exist."""
+        return self.kilosort_folder.exists() and any(self.kilosort_folder.iterdir())
+    
+    @property
+    def has_metrics(self) -> bool:
+        """Check if metrics have been computed."""
+        return self.analyzer_folder.exists() and any(self.analyzer_folder.iterdir())
+    
+    def copy_to_working_dir(self) -> None:
+        """Copy recording data to working directory."""
+        if not self.has_binary_data:
+            print(f"Copying {self.source_path} to {self.working_dir}")
+            start_t = time.time()
+            self.local_folder = copy_folder(self.source_path, self.working_dir)
+            print(f"Copying took {_n_seconds_to_formatted_time(time.time()-start_t)}")
+        else:
+            print(f"Already copied {self.source_path} to {self.local_folder}")
+    
+    def load_recording(self) -> OpenEphysBinaryRecordingExtractor:
+        """Load recording data."""
+        if self.is_split_recording:
+            # For split recordings, load all timestamped folders
+            folders = sorted(self.local_folder.glob("*-*_*"))
+            return concatenate_recordings([
+                OpenEphysBinaryRecordingExtractor(f, stream_name=self.stream_name) 
+                for f in folders
+            ])
+        else:
+            return OpenEphysBinaryRecordingExtractor(self.local_folder, stream_name=self.stream_name)
+
+def process_recording(processor: RecordingProcessor, overwrite: bool = False) -> None:
+    """Process a single recording."""
+    global_t_start = time.time()
+    print(f"Processing {processor.source_path.name} with stream name {processor.stream_name}")
+    
+    # Copy data if needed
+    processor.copy_to_working_dir()
+    
+    # Check if we need to process
+    if processor.has_sorting_results and not overwrite:
+        print("Sorting results already exist, skipping processing")
+        return
+    
+    # Load and preprocess data
+    recording_extractor = processor.load_recording()
+    recording_extractor = standard_preprocessing(recording_extractor)
+    
+    # Run sorting
+    processor.kilosort_folder.mkdir(parents=True, exist_ok=True)
+    sorting_t_start = time.time()
+    
+    sorting_ks4 = ss.run_sorter_by_property(
+        sorter_name="kilosort4",
+        recording=recording_extractor,
+        folder=processor.kilosort_folder,
+        grouping_property="group",
+        n_jobs=14,
+        verbose=True
+    )
+    sorting_ks4 = scur.remove_excess_spikes(sorting_ks4, recording_extractor)
+    print(f"Sorting duration: {_n_seconds_to_formatted_time(time.time()-sorting_t_start)}")
+    
+    # Compute stats if needed
+    if not processor.has_metrics or overwrite:
+        stats_t_start = time.time()
+        compute_stats(processor.kilosort_folder, sorting_ks4, recording_extractor)
+        print(f"Stats duration: {_n_seconds_to_formatted_time(time.time()-stats_t_start)}")
+    
+    print(f"Total duration: {_n_seconds_to_formatted_time(time.time()-global_t_start)}")
+
+if test_mode:
+    processors = [RecordingProcessor(
+        source_path=test_rec_tuple[0],
+        working_dir=main_working_dir,
+        stream_name=test_rec_tuple[1]
+    )]
+else:
+    processors = find_recordings_to_process(source_dir, main_working_dir)
+
+# First do a dry run to see what would be done
+print("=== Dry Run ===")
+for processor in processors:
+    processor.dry_run = True
+    process_recording(processor)
+
+# Ask for confirmation
+response = input("\nProceed with processing? (y/n): ")
+if response.lower() != 'y':
+    print("Aborting processing.")
+    exit()
+
+# Do the actual processing
+print("\n=== Processing ===")
+for processor in processors:
+    processor.dry_run = False
+    process_recording(processor, overwrite=overwrite_runs)
