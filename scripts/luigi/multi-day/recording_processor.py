@@ -22,21 +22,15 @@ import spikeinterface.curation as scur
 
 import torch
 
-print("CUDA available:", torch.cuda.is_available())
-print("CUDA device count:", torch.cuda.device_count() if torch.cuda.is_available() else 0)
-
-print("MPS available:", torch.backends.mps.is_available()) 
-print("MPS built:", torch.backends.mps.is_built())
-
 
 n_jobs = os.cpu_count() // 2
 
 # Example paths for testing
 EXAMPLE_PATHS = {
-    # 'source_dir':  Path('/mnt/d/temp_processing'),
-    # 'working_dir': Path('/mnt/d/temp_processing')
-    'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
-    'working_dir': None,
+    'source_dir':  Path('/mnt/d/temp_processing'),
+    'working_dir': Path('/mnt/d/temp_processing'),
+    # 'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
+    # 'working_dir': None,
     'test_recording': (
         Path("/Volumes/Extreme SSD/2024-11-13_14-39-11"),
         "Record Node 111#Neuropix-PXI-110.ProbeA"
