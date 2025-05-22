@@ -27,10 +27,10 @@ n_jobs = os.cpu_count() // 2
 
 # Example paths for testing
 EXAMPLE_PATHS = {
-    'source_dir':  Path('/mnt/d/temp_processing'),
-    'working_dir': Path('/mnt/d/temp_processing'),
-    # 'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
-    # 'working_dir': None,
+    # 'source_dir':  Path('/mnt/d/temp_processing'),
+    # 'working_dir': Path('/mnt/d/temp_processing'),
+    'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
+    'working_dir': None,
     'test_recording': (
         Path("/Volumes/Extreme SSD/2024-11-13_14-39-11"),
         "Record Node 111#Neuropix-PXI-110.ProbeA"
@@ -98,15 +98,15 @@ def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordin
 
     job_kwargs = dict(n_jobs=n_jobs, chunk_duration="1s", progress_bar=True)
     print("compute random spikes...")
-    analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500)  # parent extension
+    analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500, **job_kwargs)  # parent extension
     print("compute waveforms...")
     analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0, **job_kwargs)
     print("compute templates...")
-    analyzer.compute("templates", operators=["average", "median", "std"])
+    analyzer.compute("templates", operators=["average", "median", "std"], **job_kwargs)
     print(analyzer)
 
-    si.compute_noise_levels(analyzer)   # return_scaled=True  #???
-    si.compute_spike_amplitudes(analyzer)
+    si.compute_noise_levels(analyzer, **job_kwargs)   # return_scaled=True  #???
+    si.compute_spike_amplitudes(analyzer, **job_kwargs)
 
     print("compute quality metrics...")
     start_time = time.time()
