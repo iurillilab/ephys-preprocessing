@@ -37,6 +37,10 @@ EXAMPLE_PATHS = {
     )
 }
 
+#################################
+# Utils
+#################################
+
 def _n_seconds_to_formatted_time(n_seconds: int) -> str:
     """Convert seconds to formatted time string."""
     n_seconds = int(n_seconds)
@@ -137,6 +141,11 @@ def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordin
     assert 'isolation_distance' in metrics.columns
     elapsed_time = time.time() - start_time
     print(f"Elapsed time: {elapsed_time} seconds")
+
+
+##################################
+# RecordingProcessor class
+##################################
 
 @dataclass
 class RecordingProcessor:
