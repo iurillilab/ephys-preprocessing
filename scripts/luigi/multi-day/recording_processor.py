@@ -23,14 +23,14 @@ import spikeinterface.curation as scur
 import torch
 
 
-n_jobs = os.cpu_count() // 2
+N_JOBS = os.cpu_count() // 2
 
 # Example paths for testing
 EXAMPLE_PATHS = {
-    # 'source_dir':  Path('/mnt/d/temp_processing'),
-    # 'working_dir': Path('/mnt/d/temp_processing'),
-    'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
-    'working_dir': None,
+    'source_dir':  Path('/mnt/d/temp_processing'),
+    'working_dir': Path('/mnt/d/temp_processing'),
+    # 'source_dir':  Path("/Users/vigji/Desktop/short_recording_oneshank"),
+    # 'working_dir': None,
     'test_recording': (
         Path("/Volumes/Extreme SSD/2024-11-13_14-39-11"),
         "Record Node 111#Neuropix-PXI-110.ProbeA"
@@ -66,6 +66,11 @@ def get_stream_name(folder: Path) -> str:
     probe = stream_path.name
     return f"Record Node {record_node_number}#{probe}"
 
+
+#################################
+# Actual processing functions
+#################################
+
 def standard_preprocessing(recording_extractor: OpenEphysBinaryRecordingExtractor) -> OpenEphysBinaryRecordingExtractor:
     """Aggregate lab standard preprocessing steps for Neuropixels data."""
     recording = spre.correct_lsb(recording_extractor, verbose=1)
@@ -84,6 +89,18 @@ def standard_preprocessing(recording_extractor: OpenEphysBinaryRecordingExtracto
 
     return recording_hpsf
 
+
+def run_sorting(recording: OpenEphysBinaryRecordingExtractor, kilosort_folder: Path, overwrite) -> si.BaseSorting:
+    sorting = ss.run_sorter(
+                sorter_name="kilosort4",
+                recording=recording,
+                folder=kilosort_folder,
+                remove_existing_folder=overwrite,
+                n_jobs=N_JOBS,
+                verbose=True,
+            )
+    return scur.remove_excess_spikes(sorting, recording)
+
 def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordingExtractor, sortinganalyzerfolder: Path) -> None:
     # run the analyzer
     analyzer = create_sorting_analyzer(
@@ -93,10 +110,10 @@ def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordin
         format="binary_folder",
         sparse=True,
         overwrite=True,
-        n_jobs=n_jobs
+        n_jobs=N_JOBS
     )
 
-    job_kwargs = dict(n_jobs=n_jobs, chunk_duration="1s", progress_bar=True)
+    job_kwargs = dict(n_jobs=N_JOBS, chunk_duration="1s", progress_bar=True)
     print("compute random spikes...")
     analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500, **job_kwargs)  # parent extension
     print("compute waveforms...")
@@ -159,11 +176,12 @@ class RecordingProcessor:
     
     def try_load_sorter(self) -> Optional[si.BaseSorting]:
         """Try to load the sorter results, return None if it fails."""
-        return si.read_kilosort(self.kilosort_folder / "sorter_output", keep_good_only=False)
-        #except Exception as e:
-        #    if self.dry_run:
-        #        print(f"[DRY RUN] Failed to load sorter: {e}")
-        #    return None
+        try:
+            return si.read_kilosort(self.kilosort_folder / "sorter_output", keep_good_only=False)
+        except Exception as e:
+            if self.dry_run:
+                print(f"[DRY RUN] Failed to load sorter: {e}")
+            return None
     
     def try_load_analyzer(self) -> Optional[si.SortingAnalyzer]:
         """Try to load the analyzer results, return None if it fails."""
@@ -176,11 +194,10 @@ class RecordingProcessor:
     
     def copy_to_working_dir(self) -> None:
         """Copy recording data to working directory."""
-        if self.dry_run:
-            print(f"[DRY RUN] Would copy {self.source_path} to {self.working_dir}")
-            return
-            
         print(f"Copying {self.source_path} to {self.working_dir}")
+        if self.dry_run:
+            print(f"[DRY RUN] not copied")
+            return
         start_t = time.time()
         self.local_folder = copy_folder(self.source_path, self.working_dir)
         print(f"Copying took {_n_seconds_to_formatted_time(time.time()-start_t)}")
@@ -215,16 +232,11 @@ def process_recording(processor: RecordingProcessor) -> None:
             recording = standard_preprocessing(recording)
             processor.kilosort_folder.mkdir(parents=True, exist_ok=True)
             
-            sorting = ss.run_sorter(
-                sorter_name="kilosort4",
+            sorting = run_sorting(
                 recording=recording,
-                folder=processor.kilosort_folder,
-                remove_existing_folder=processor.overwrite,
-                n_jobs=n_jobs,
-                verbose=True,
-                # torch_device="mps"
+                kilosort_folder=processor.kilosort_folder,
+                overwrite=processor.overwrite
             )
-            sorting = scur.remove_excess_spikes(sorting, recording)
             print(f"Sorting duration: {_n_seconds_to_formatted_time(time.time()-sorting_t_start)}")
     else:
         print("Found existing sorting results")
@@ -299,12 +311,11 @@ def main():
         EXAMPLE_PATHS['source_dir'],
         EXAMPLE_PATHS['working_dir'],
         dry_run=False,
-        overwrite=False
+        overwrite=True
     )
     print(processors)
     for processor in processors:
         process_recording(processor)
 
-# assert Path("/Volumes/Extreme SSD/test_yadu_rec/M29/2024-11-13_14-39-11/kilosort4/0").exists()
 if __name__ == "__main__":
     main() 
