@@ -10,6 +10,7 @@ import subprocess
 import traceback
 import re
 from pprint import pprint
+import hashlib
 
 import spikeinterface.sorters as ss
 from spikeinterface.extractors import OpenEphysBinaryRecordingExtractor
@@ -48,12 +49,44 @@ def _n_seconds_to_formatted_time(n_seconds: int) -> str:
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:02}:{minutes:02}:{seconds:02}"
 
-def copy_folder(src: Union[str, Path], dst: Union[str, Path]) -> Path:
-    """Copy a folder to a new location."""
+def is_timestamp_folder(folder: Path) -> bool:
+    """Check if a folder name matches the timestamp pattern."""
+    timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
+    return bool(timestamp_pattern.match(folder.name)) and folder.is_dir()
+
+def copy_folder(src: Union[str, Path], dst: Union[str, Path], overwrite: bool = True) -> Path:
+    """Copy a folder to a new location.
+    
+    Args:
+        src: Source folder path
+        dst: Destination folder path
+        overwrite: If True, overwrites files that are:
+            - Different size than source
+            - Newer in source (mtime)
+    """
     src, dst = Path(src), Path(dst)
     dst = dst / src.name
     dst.mkdir(exist_ok=True, parents=True)
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+    
+    for item in src.rglob("*"):
+        if item.is_file():
+            rel_path = item.relative_to(src)
+            dest_path = dst / rel_path
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Check if we should overwrite
+            should_copy = False
+            if not dest_path.exists():
+                should_copy = True
+            elif overwrite:
+                # Check if source is newer or size is different
+                if (item.stat().st_mtime != dest_path.stat().st_mtime or 
+                    item.stat().st_size != dest_path.stat().st_size):
+                    should_copy = True
+            
+            if should_copy:
+                shutil.copy2(item, dest_path)
+    
     return dst
 
 def get_stream_name(folder: Path) -> str:
@@ -69,6 +102,102 @@ def get_stream_name(folder: Path) -> str:
     record_node_number = record_node.split("Record Node ")[1]
     probe = stream_path.name
     return f"Record Node {record_node_number}#{probe}"
+
+
+
+##################################
+# RecordingProcessor class
+##################################
+
+@dataclass
+class RecordingProcessor:
+    """Handles path management and processing state for a recording."""
+    source_path: Path
+    working_dir: Path  # Optional[Path]
+    stream_name: str
+    is_split_recording: bool = False
+    
+    def __post_init__(self):
+        # self.source_path = Path(self.source_path)
+        # If working_dir is None, use the parent directory of the source_path
+        # self.working_dir = Path(self.working_dir) if self.working_dir is not None else self.source_path.parent
+
+        self.local_folder = self.working_dir / self.source_path.name
+        self.kilosort_folder = self.local_folder / "kilosort4"
+        self.analyzer_folder = self.kilosort_folder / "analyser"
+    
+    def try_load_recording(self) -> Optional[OpenEphysBinaryRecordingExtractor]:
+        """Try to load the recording, return None if it fails."""
+        try:
+            if self.is_split_recording:
+                folders = sorted(f for f in self.local_folder.glob("*") if is_timestamp_folder(f))
+                if not folders:
+                    return None
+                return concatenate_recordings([
+                    OpenEphysBinaryRecordingExtractor(f, stream_name=self.stream_name) 
+                    for f in folders
+                ])
+            else:
+                return OpenEphysBinaryRecordingExtractor(self.local_folder, stream_name=self.stream_name)
+        except Exception as e:
+            print(f"Failed to load recording in {self.local_folder} (Split: {self.is_split_recording} ): {e}")
+            return None
+    
+    def try_load_sorter(self) -> Optional[si.BaseSorting]:
+        """Try to load the sorter results, return None if it fails."""
+        try:
+            return si.read_kilosort(self.kilosort_folder / "sorter_output", keep_good_only=False)
+        except Exception as e:
+            print(f"Failed to load sorter from {self.kilosort_folder}: {e}")
+            return None
+    
+    def try_load_analyzer(self) -> Optional[si.SortingAnalyzer]:
+        """Try to load the analyzer results, return None if it fails."""
+        try:
+            return si.load_sorting_analyzer(self.analyzer_folder, format="binary_folder")
+        except Exception as e:
+            print(f"Failed to load analyzer from {self.analyzer_folder}: {e}")
+            return None
+    
+    def copy_to_working_dir(self) -> Path:
+        """Copy recording data to working directory."""
+        self.local_folder = copy_folder(self.source_path, self.working_dir)
+        return self.local_folder
+
+    def copy_results_to_source_dir(self) -> None:
+        """Copy results to source directory, only copying new or modified files.
+        
+        Will also overwrite files that are:
+        - Empty (0 bytes)
+        - Corrupted (destination file size is less than 95% of source file size)
+        """
+        for item in self.local_folder.rglob("*"):
+            if item.is_file():
+                rel_path = item.relative_to(self.local_folder)
+                dest_path = self.source_path / rel_path
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Check if we should overwrite
+                should_copy = False
+                if not dest_path.exists():
+                    should_copy = True
+                else:
+                    # Check if source is newer
+                    if item.stat().st_mtime > dest_path.stat().st_mtime:
+                        should_copy = True
+                    # Check if destination is empty
+                    elif dest_path.stat().st_size == 0:
+                        should_copy = True
+                    # Check if destination might be corrupted
+                    else:
+                        source_size = item.stat().st_size
+                        dest_size = dest_path.stat().st_size
+                        if dest_size < 0.95 * source_size:
+                            should_copy = True
+                
+                if should_copy:
+                    shutil.copy2(item, dest_path)
+
 
 
 #################################
@@ -94,19 +223,18 @@ def standard_preprocessing(recording_extractor: OpenEphysBinaryRecordingExtracto
     return recording_hpsf
 
 
-def run_sorting(recording: OpenEphysBinaryRecordingExtractor, kilosort_folder: Path, overwrite) -> si.BaseSorting:
+def run_sorting(recording: OpenEphysBinaryRecordingExtractor, kilosort_folder: Path, overwrite: bool) -> si.BaseSorting:
     sorting = ss.run_sorter(
-                sorter_name="kilosort4",
-                recording=recording,
-                folder=kilosort_folder,
-                remove_existing_folder=overwrite,
-                n_jobs=N_JOBS,
-                verbose=True,
-            )
+        sorter_name="kilosort4",
+        recording=recording,
+        folder=kilosort_folder,
+        remove_existing_folder=overwrite,
+        n_jobs=N_JOBS,
+        verbose=True,
+    )
     return scur.remove_excess_spikes(sorting, recording)
 
 def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordingExtractor, sortinganalyzerfolder: Path) -> None:
-    # run the analyzer
     analyzer = create_sorting_analyzer(
         sorting=sorting_ks,
         recording=recording,
@@ -118,100 +246,29 @@ def compute_stats(sorting_ks: si.BaseSorting, recording: OpenEphysBinaryRecordin
     )
 
     job_kwargs = dict(n_jobs=N_JOBS, chunk_duration="1s", progress_bar=True)
-    print("compute random spikes...")
-    analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500, **job_kwargs)  # parent extension
-    print("compute waveforms...")
+    analyzer.compute("random_spikes", method="uniform", max_spikes_per_unit=500, **job_kwargs)
     analyzer.compute("waveforms", ms_before=1.0, ms_after=2.0, **job_kwargs)
-    print("compute templates...")
     analyzer.compute("templates", operators=["average", "median", "std"], **job_kwargs)
-    print(analyzer)
 
-    si.compute_noise_levels(analyzer, **job_kwargs)   # return_scaled=True  #???
+    si.compute_noise_levels(analyzer, **job_kwargs)
     si.compute_spike_amplitudes(analyzer, **job_kwargs)
 
-    print("compute quality metrics...")
-    start_time = time.time()
     dqm_params = si.get_default_qm_params()
-    qms = analyzer.compute(input={"principal_components": dict(n_components=3, mode="by_channel_local"),
-                                    "quality_metrics": dict(skip_pc_metrics=False, qm_params=dqm_params)}, 
-                            verbose=True, **job_kwargs)
+    qms = analyzer.compute(
+        input={
+            "principal_components": dict(n_components=3, mode="by_channel_local"),
+            "quality_metrics": dict(skip_pc_metrics=False, qm_params=dqm_params)
+        }, 
+        verbose=True, 
+        **job_kwargs
+    )
     qms = analyzer.get_extension(extension_name="quality_metrics")
     metrics = qms.get_data()
-    print(metrics.columns)
     assert 'isolation_distance' in metrics.columns
-    elapsed_time = time.time() - start_time
-    print(f"Elapsed time: {elapsed_time} seconds")
+    return metrics
 
 
-##################################
-# RecordingProcessor class
-##################################
-
-@dataclass
-class RecordingProcessor:
-    """Handles path management and processing state for a recording."""
-    source_path: Path
-    working_dir: Optional[Path]
-    stream_name: str
-    is_split_recording: bool = False
-    dry_run: bool = False
-    overwrite: bool = False
-    
-    def __post_init__(self):
-        self.source_path = Path(self.source_path)
-        # If working_dir is None, use the parent directory of the source_path
-        self.working_dir = Path(self.working_dir) if self.working_dir is not None else self.source_path.parent
-        self.local_folder = self.working_dir / self.source_path.name
-        self.kilosort_folder = self.local_folder / "kilosort4"
-        self.analyzer_folder = self.kilosort_folder / "analyser"
-    
-    def try_load_recording(self) -> Optional[OpenEphysBinaryRecordingExtractor]:
-        """Try to load the recording, return None if it fails."""
-        try:
-            if self.is_split_recording:
-                folders = sorted(self.local_folder.glob("*-*_*"))
-                if not folders:
-                    return None
-                return concatenate_recordings([
-                    OpenEphysBinaryRecordingExtractor(f, stream_name=self.stream_name) 
-                    for f in folders
-                ])
-            else:
-                return OpenEphysBinaryRecordingExtractor(self.local_folder, stream_name=self.stream_name)
-        except Exception as e:
-            if self.dry_run:
-                print(f"[DRY RUN] Failed to load recording: {e}")
-            return None
-    
-    def try_load_sorter(self) -> Optional[si.BaseSorting]:
-        """Try to load the sorter results, return None if it fails."""
-        try:
-            return si.read_kilosort(self.kilosort_folder / "sorter_output", keep_good_only=False)
-        except Exception as e:
-            if self.dry_run:
-                print(f"[DRY RUN] Failed to load sorter: {e}")
-            return None
-    
-    def try_load_analyzer(self) -> Optional[si.SortingAnalyzer]:
-        """Try to load the analyzer results, return None if it fails."""
-        try:
-            return si.load_sorting_analyzer(self.analyzer_folder, format="binary_folder")
-        except Exception as e:
-            if self.dry_run:
-                print(f"[DRY RUN] Failed to load analyzer: {e}")
-            return None
-    
-    def copy_to_working_dir(self) -> None:
-        """Copy recording data to working directory."""
-        print(f"Copying {self.source_path} to {self.working_dir}")
-        if self.dry_run:
-            print(f"[DRY RUN] not copied")
-            return
-        start_t = time.time()
-        self.local_folder = copy_folder(self.source_path, self.working_dir)
-        print(f"Copying took {_n_seconds_to_formatted_time(time.time()-start_t)}")
-
-def process_recording(processor: RecordingProcessor) -> None:
+def process_recording(processor: RecordingProcessor, dry_run: bool = False, overwrite: bool = False) -> None:
     """Process a single recording."""
     print(f"\nProcessing {processor.source_path.name} with stream name {processor.stream_name}")
     global_t_start = time.time()
@@ -219,62 +276,87 @@ def process_recording(processor: RecordingProcessor) -> None:
     # Step 1: Try to load or copy recording data
     recording = processor.try_load_recording()
     if recording is None:
-        if processor.dry_run:
+        if dry_run:
             print("[DRY RUN] Would copy and load recording data")
         else:
+            print("Copying recording data...")
+            copy_t_start = time.time()
             processor.copy_to_working_dir()
+            print(f"Copying took {_n_seconds_to_formatted_time(time.time()-copy_t_start)}")
+            
             recording = processor.try_load_recording()
             if recording is None:
                 raise ValueError(f"Failed to load recording after copying")
     else:
-        print("Found existing recording data")
+        print("Loaded existing recording data.")
     
     # Step 2: Try to load or run spike sorting
     sorting = processor.try_load_sorter()
-    print(f"Sorting: \n{sorting}")
-    if sorting is None or processor.overwrite:
-        if processor.dry_run:
-            print("[DRY RUN] Would run spike sorting")
+    if sorting is None:
+        print("No existing sorting found")
+    else:
+        print(f"Found existing sorting with {len(sorting.get_unit_ids())} units")
+
+    if sorting is None or overwrite:
+        if dry_run:
+            print("[DRY RUN] Would run spike sorting here")
         else:
             print("Running spike sorting...")
             sorting_t_start = time.time()
-            recording = standard_preprocessing(recording)
-            processor.kilosort_folder.mkdir(parents=True, exist_ok=True)
             
+            print("Preprocessing recording...")
+            recording = standard_preprocessing(recording)
+            
+            processor.kilosort_folder.mkdir(parents=True, exist_ok=True)
             sorting = run_sorting(
                 recording=recording,
                 kilosort_folder=processor.kilosort_folder,
-                overwrite=processor.overwrite
+                overwrite=overwrite
             )
             print(f"Sorting duration: {_n_seconds_to_formatted_time(time.time()-sorting_t_start)}")
     else:
-        print("Found existing sorting results")
+        print("Using existing sorting results")
     
     # Step 3: Try to load or compute metrics
     analyzer = processor.try_load_analyzer()
-    if analyzer is None or processor.overwrite:
-        if processor.dry_run:
+    if analyzer is None:
+        print("No existing metrics found")
+    else:
+        print("Found existing metrics")
+
+    if analyzer is None or overwrite:
+        if dry_run:
             print("[DRY RUN] Would compute metrics")
         else:
             print("Computing metrics...")
             stats_t_start = time.time()
-            compute_stats(sorting, recording, processor.analyzer_folder)
+            metrics = compute_stats(sorting, recording, processor.analyzer_folder)
+            print(f"Computed metrics: {metrics.columns.tolist()}")
             print(f"Stats duration: {_n_seconds_to_formatted_time(time.time()-stats_t_start)}")
     else:
-        print("Found existing metrics")
+        print("Using existing metrics")
     
-    if not processor.dry_run:
+    if not dry_run:
         print(f"Total duration: {_n_seconds_to_formatted_time(time.time()-global_t_start)}")
 
-def find_recordings_to_process(source_dir: Path, working_dir: Path, dry_run: bool = False, overwrite: bool = False) -> List[RecordingProcessor]:
+
+#################################
+# Search for recordings to process
+#################################
+
+
+def find_recordings_to_process(source_dir: Path, working_dir: Path) -> List[RecordingProcessor]:
     """Find all recordings to process."""
+    source_dir = Path(source_dir)
+    working_dir = source_dir.parent if working_dir is None else Path(working_dir)
     processors = []
-    timestamp_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
-    
-    # Find all timestamp folders directly in source_dir and its subdirectories
+
+    # Find all timestamp folders up to 3 levels deep using explicit glob patterns for speed
+    glob_patterns = ["*-*_*/", "*/*-*_*/", "*/*/*-*_*/"]
     timestamp_folders = sorted(
-        folder for folder in source_dir.rglob("*-*_*/")
-        if folder.is_dir() and timestamp_pattern.match(folder.name)
+        folder for pattern in glob_patterns
+        for folder in source_dir.glob(pattern)
+        if is_timestamp_folder(folder)
     )
     
     print(f"Found {len(timestamp_folders)} timestamp folders to process")
@@ -290,17 +372,13 @@ def find_recordings_to_process(source_dir: Path, working_dir: Path, dry_run: boo
                         source_path=parent_folder,
                         working_dir=working_dir,
                         stream_name=stream_name,
-                        is_split_recording=True,
-                        dry_run=dry_run,
-                        overwrite=overwrite
+                        is_split_recording=True
                     ))
             else:
                 processors.append(RecordingProcessor(
                     source_path=timestamp_folder,
                     working_dir=working_dir,
-                    stream_name=stream_name,
-                    dry_run=dry_run,
-                    overwrite=overwrite
+                    stream_name=stream_name
                 ))
         except Exception as e:
             print(f"Error processing {timestamp_folder}: {repr(e)} ({type(e)})")
@@ -317,14 +395,16 @@ def main():
     # Example with real processing
     print("\n=== Real Processing Example ===")
     processors = find_recordings_to_process(
-        EXAMPLE_PATHS['source_dir'],
-        EXAMPLE_PATHS['working_dir'],
-        dry_run=False,
-        overwrite=True
+        "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys _recordings/M29",
+        working_dir=None,
+        # EXAMPLE_PATHS['source_dir'],
+        # EXAMPLE_PATHS['working_dir']
     )
-    print(processors)
+    # print(processors)
     for processor in processors:
-        process_recording(processor)
+        print("\n" + "-"*100)
+        print(f"Processing {processor.source_path} with stream name {processor.stream_name}")
+        process_recording(processor, dry_run=True, overwrite=False)
 
 if __name__ == "__main__":
     main() 
