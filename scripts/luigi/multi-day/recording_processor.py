@@ -405,7 +405,7 @@ luigi_macbook_kwargs = RunArgs(
 )
 
 wsl_run_kwargs = RunArgs(
-    source_dir=Path("/mnt/d/temp_processing"),
+    source_dir=Path("/mnt/nas/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys _recordings"),
     root_working_dir=Path("/mnt/d/temp_processing"),
     dry_run=True,
     overwrite=False,
@@ -416,8 +416,8 @@ wsl_run_kwargs = RunArgs(
 
 def main():
     """Example usage of the recording processor."""
-    run_kwargs = luigi_macbook_kwargs
-    # Example with dry run
+    # run_kwargs = luigi_macbook_kwargs
+    run_kwargs = wsl_run_kwargs
     
     # Example with real processing
     print("\n=== Real Processing Example ===")
