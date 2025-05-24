@@ -1,4 +1,6 @@
 """Recording processor for spike sorting pipeline."""
+# Before running, run 
+# subprocess.run("sudo mount -t drvfs \\\\10.231.128.151\\SystemsNeuroBiology /mnt/nas")
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,6 +9,7 @@ import time
 import os
 import traceback
 import re
+import subprocess
 
 import spikeinterface.sorters as ss
 from spikeinterface.extractors import OpenEphysBinaryRecordingExtractor
@@ -18,6 +21,7 @@ import spikeinterface.full as si
 import spikeinterface.curation as scur
 
 from pprint import pprint
+from tqdm import tqdm
 
 
 N_JOBS = os.cpu_count() // 2
@@ -64,7 +68,7 @@ def is_timestamp_folder(folder: Path) -> bool:
 
 def copy_folder(src: str | Path, dst: str | Path, overwrite: bool = True) -> Path:
     """Copy a folder to a new location.
-    
+
     Args:
         src: Source folder path
         dst: Destination folder path
@@ -76,7 +80,7 @@ def copy_folder(src: str | Path, dst: str | Path, overwrite: bool = True) -> Pat
     dst = dst / src.name
     dst.mkdir(exist_ok=True, parents=True)
     
-    for item in src.rglob("*"):
+    for item in tqdm(list(src.rglob("*")), desc="Copying files", unit="file"):
         if item.is_file():
             rel_path = item.relative_to(src)
             dest_path = dst / rel_path
@@ -93,7 +97,7 @@ def copy_folder(src: str | Path, dst: str | Path, overwrite: bool = True) -> Pat
                     should_copy = True
             
             if should_copy:
-                shutil.copy2(item, dest_path)
+                shutil.copyfile(item, dest_path)  # or copy2 for metadata?
     
     return dst
 
@@ -407,7 +411,7 @@ luigi_macbook_kwargs = RunArgs(
 wsl_run_kwargs = RunArgs(
     source_dir=Path("/mnt/nas/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys _recordings"),
     root_working_dir=Path("/mnt/d/temp_processing"),
-    dry_run=True,
+    dry_run=False,
     overwrite=False,
     copy_upstream=True,
     cleanup=True
@@ -425,10 +429,15 @@ def main():
     pprint(processors)
     first_split = next((p for p in processors if p.is_split_recording), None)
     first_not_split = next((p for p in processors if not p.is_split_recording), None)
-    
-    for processor in [p for p in [first_split, first_not_split] if p is not None]:
+
+    for processor in processors:
         print("\n" + "-"*100 + "\n")
         process_recording(processor, dry_run=run_kwargs.dry_run, overwrite=run_kwargs.overwrite, copy_upstream=run_kwargs.copy_upstream, cleanup=run_kwargs.cleanup)
+
+    
+    # for processor in [p for p in [first_split, first_not_split] if p is not None]:
+    #     print("\n" + "-"*100 + "\n")
+    #     process_recording(processor, dry_run=run_kwargs.dry_run, overwrite=run_kwargs.overwrite, copy_upstream=run_kwargs.copy_upstream, cleanup=run_kwargs.cleanup)
 
 if __name__ == "__main__":
     main() 
