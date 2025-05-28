@@ -112,7 +112,7 @@ class RecordingProcessor:
     """Handles path management and processing state for a recording."""
     source_path: Path
     root_working_dir: Path | None  # Optional[Path]
-    stream_name: str
+    # stream_name: str
     is_split_recording: bool = False
 
     def __post_init__(self):
@@ -124,6 +124,7 @@ class RecordingProcessor:
         self.local_folder = self.root_working_dir / self.source_path.name if self.processed_in_different_folder else self.source_path
         self.kilosort_folder = self.local_folder / "kilosort4"
         self.analyzer_folder = self.kilosort_folder / "analyser"
+        self.stream_name = get_stream_name(self.source_path)
 
     def try_load_recording(self) -> OpenEphysBinaryRecordingExtractor | None:
         """Try to load the recording, return None if it fails."""
@@ -374,14 +375,14 @@ def find_recordings_to_process(source_dir: Path, root_working_dir: Path) -> list
                     processors.append(RecordingProcessor(
                         source_path=parent_folder,
                         root_working_dir=root_working_dir,
-                        stream_name=stream_name,
+                        # stream_name=stream_name,
                         is_split_recording=True
                     ))
             else:
                 processors.append(RecordingProcessor(
                     source_path=timestamp_folder,
                     root_working_dir=root_working_dir,
-                    stream_name=stream_name
+                    # stream_name=stream_name
                 ))
         except Exception as e:
             print(f"Error processing {timestamp_folder}: {repr(e)} ({type(e)})")
