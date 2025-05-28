@@ -1,5 +1,4 @@
 #%%
-%matplotlib widget
 import spikeinterface.extractors as se
 from pathlib import Path
 import numpy as np
@@ -75,7 +74,6 @@ plt.figure()
 plt.plot(events_with_label_1['label'], 'o')
 plt.plot(events_with_label_2['label'], 'o')
 plt.plot(events_with_label_4['label'], 'o')
-
 #%%
 len(events_with_label_4)# %%
 # %%

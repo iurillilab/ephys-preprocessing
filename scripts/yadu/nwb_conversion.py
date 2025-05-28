@@ -35,11 +35,10 @@ spike_times = np.array(a)
 unit_id = spikes["unit_name"].to_numpy()
 spike_times
 #%%
-plt.plot(a.index.to_numpy(), a.to_numpy(), 'o')
+plt.plot(a.index.to_numpy(), a .to_numpy(), 'o')
 plt.xlabel('Spike Time (s)')
 plt.ylabel('Unit ID')
 plt.show()
 
 # %%
-b = spikes.to_tsd('unit_name')
 # %%
