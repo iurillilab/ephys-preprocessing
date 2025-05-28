@@ -58,13 +58,14 @@ rec_cmr = spkp.common_reference(recording=recording_npx1, operator="median", ref
 # %%
 rec = spkp.highpass_filter(recording=recording_npx1)
 # %%
-bad_channel_ids = spkp.detect_bad_channels(recording=rec)
-bad_channel_ids = np.where(bad_channel_ids == 'bad')[0]
-bad_channel_ids
-# %%
-rec = spkp.interpolate_bad_channels(recording=rec, bad_channel_ids=bad_channel_ids)
+# bad_channel_ids = spkp.detect_bad_channels(recording=rec)
+# bad_channel_ids = np.where(bad_channel_ids == 'bad')[0]
+# bad_channel_ids
+# # %%
+# rec = spkp.interpolate_bad_channels(recording=rec, bad_channel_ids=bad_channel_ids)
 # %%
 rec = spkp.highpass_spatial_filter(recording=rec)
 # %%
-sort = ss.run_sorter('kilosort4', rec, folder=output_folder, verbose=True, n_jobs = -1)
+if __name__ == '__main__':
+    sort = ss.run_sorter('kilosort4', rec, folder=output_folder, verbose=True, n_jobs = -1, remove_existing_folder= True)
 # %%
