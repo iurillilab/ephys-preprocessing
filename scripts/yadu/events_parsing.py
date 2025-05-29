@@ -1,4 +1,5 @@
 #%%
+%matplotlib inline
 import spikeinterface.extractors as se
 from pathlib import Path
 import numpy as np
@@ -6,18 +7,18 @@ import matplotlib.pyplot as plt
 import csv
 import pandas as pd
 #%% Path to an OpenEphys recording:
-recording_path = r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\2025-03-09_15-37-57'
-
+parent_path = Path(r'D:/')
+recording_path = parent_path/'Anaesthetised'/ 'M26_D879'/ '20250307'/ '2025-03-07_16-14-43'
+events_path = recording_path / 'Record Node 107' / 'experiment1' / 'recording1' / 'events'
 #%%
 # Loading events
 # Extract events. aka digital signals:
-recording_path_nas = r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\2025-03-09_15-37-57'
 events = se.read_openephys_event(recording_path)
 
 events_array = events.get_events(channel_id='PXIe-6341Digital Input Line')
 events_array
 # %%
-recording_path_events =Path(r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\2025-03-09_15-37-57\Record Node 107\experiment1\recording1\events\NI-DAQmx-102.PXIe-6341\TTL')
+recording_path_events = events_path / 'NI-DAQmx-102.PXIe-6341' / 'TTL'
 evts_path = recording_path_events
 full_words = np.load(evts_path / "full_words.npy")
 sample_numbers = np.load(evts_path / "sample_numbers.npy")
@@ -38,7 +39,7 @@ plt.figure()
 # plt.plot(np.diff(clock[:, 0]))
 plt.plot(np.diff(laser[:, 0]))
 # %%
-motor_log = pd.read_csv(r'X:\SNeuroBiology_shared\P05_3DRIG_YE-LP\YE_3D_rig\anaesthetised\20250309\M28\153729\motor-log_2025-03-09T15_37_29.csv')
+motor_log = pd.read_csv(parent_path/'Anaesthetised'/ 'M26_D879'/ '20250307' / '161450'/ 'motor-log_2025-03-07T16_14_50.csv')
 motor_log
 # motor_log.drop(0)
 # %%
@@ -112,5 +113,5 @@ trial_log['home_movement_off'] = home_movement['home_movement_off']
 trial_log.drop(['Timestamp', 'timestamp_NIDAQ', 'duration_NIDAQ'], axis=1, inplace=True)
 # %%
 trial_log
-
+trial_log.to_csv(recording_path / 'trial_log.csv', index=False)
 # %%
