@@ -40,7 +40,8 @@ from neuroconv.utils import dict_deep_update
 # Change the file_path so it points to the slp file in your system
 file_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144/videos/Object/multicam_video_2025-05-08T16_36_18_cropped_20250528161845/multicam_video_2025-05-08T16_36_18_centralpredictions.slp"  # sample_folder / "sleap" / "predictions_1.2.7_provenance_and_tracking.slp"
 interface = SLEAPInterface(file_path=file_path, verbose=False)
-
+# Then, run:
+# interface.set_aligned_timestamps
 
 # Extract what metadata we can from the source files
 metadata = interface.get_metadata()
@@ -51,7 +52,7 @@ nwbfile_path = f"/Users/vigji/Desktop/delete_me.nwb"  # This should be something
 interface.run_conversion(nwbfile_path=nwbfile_path, metadata=metadata)
 
 # %%
-def get_timestamps(event_data_folder, recording_number=1, cam_ch=2):
+def get_timestamps_no_si(event_data_folder, recording_number=1, cam_ch=2):
     binary_data_folder_pattern = f"Record Node */experiment*/recording{recording_number}/events/NI-DAQmx-*.PXIe-6341/TTL"
     binary_data_folder = next(event_data_folder.glob(binary_data_folder_pattern))
 
@@ -64,6 +65,22 @@ def get_timestamps(event_data_folder, recording_number=1, cam_ch=2):
 
     video_trigger_times = timestamps[states == cam_ch]
     return video_trigger_times
+
+def get_timestamps_si(data_folder, recording_number=1, cam_ch=2):
+    event_data_folder_pattern = f"Record Node */experiment*/recording{recording_number}/events/NI-DAQmx-*.PXIe-6341/TTL"
+    print(data_folder, event_data_folder_pattern)
+    binary_data_folder = next(data_folder.glob(event_data_folder_pattern))
+    stream_name = binary_data_folder.parts[-2]
+
+    event_interface = OpenEphysBinaryEventExtractor(folder_path=data_folder, stream_id=stream_name)
+    return event_interface
+
+# get_timestamps_si(sample_folder, recording_number=1, cam_ch=2)
+# OpenEphysBinaryEventExtractor()
+from spikeinterface.extractors import OpenEphysBinaryEventExtractor
+f = list(sample_folder.glob("NPXData/2025-*"))[0]
+OpenEphysBinaryEventExtractor(folder_path=f)
+# %%
 
 
 
