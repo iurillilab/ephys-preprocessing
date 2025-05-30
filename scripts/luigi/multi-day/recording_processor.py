@@ -33,6 +33,7 @@ N_JOBS = os.cpu_count() // 2
 
 def get_stream_name(folder: Path, data_type: Literal["events", "continuous"] = "continuous") -> str:
     """Get stream name from folder."""
+    folder = Path(folder)
     STREAM_NAME_MATCH = f"Record Node */experiment*/recording*/{data_type}/Neuropix-PXI-*.Probe*"
     try:
         stream_path = next(folder.glob(STREAM_NAME_MATCH))
