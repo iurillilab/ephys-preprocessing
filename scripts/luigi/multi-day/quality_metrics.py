@@ -33,28 +33,16 @@ def _get_units_df(probe_sorted_units):
     return units_df
 
 # %%
-sample_folder = Path("/Users/vigji/Desktop/2025-05-09_12-04-15")  # Path("/Users/vigji/Desktop/short_recording_oneshank/2025-01-22_16-56-15")
-# sorter = read_kilosort(sample_folder / "kilosort4" / "sorter_output", keep_good_only=False)
-analyzer = load_sorting_analyzer(sample_folder / "kilosort4" / "analyser", format="binary_folder")
-units_df = _get_units_df(sample_folder / "kilosort4" / "sorter_output")
-
-# %%
-qms = analyzer.get_extension(extension_name="quality_metrics")
-metrics = qms.get_data()
-good_filter = units_df["KSLabel"] == "good"
-assert len(units_df) == len(metrics)
-
-# %%
 # NAS:
 #####
-nas_data_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys _recordings")
+nas_data_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys _recordings/M30")
 
 local_csv_filename = Path("nas_units_df.csv")
 if local_csv_filename.exists():
     all_dfs = pd.read_csv(local_csv_filename)
     all_dfs["recording_date"] = pd.to_datetime(all_dfs["recording_date"])
 else:
-    ks_paths = list(nas_data_path.glob("*/*/kilosort4")) + list(nas_data_path.glob("*/*/*/kilosort4"))
+    ks_paths = list(nas_data_path.glob("*/kilosort4")) + list(nas_data_path.glob("*/*/kilosort4"))
     print(len(ks_paths))
     all_dfs = []
     for ks_path in tqdm(ks_paths):
@@ -228,7 +216,7 @@ fig = px.line(
     y="Number of Units",
     color="Filter",
     markers=True,
-    title="Number of Units per Day by Quality Filter"
+    title="Number of Units per Day by Quality Filter - M29"
 )
 
 # Update layout
@@ -236,7 +224,10 @@ fig.update_layout(
     xaxis_title="Recording Day",
     yaxis_title="Number of Units",
     template="plotly_white",
-    hovermode="x unified"
+    hovermode="x unified",
+    width=800,
+    height=500,
+    yaxis=dict(range=[0, 600])
 )
 
 # Update x-axis to show actual dates

@@ -12,7 +12,6 @@ from pprint import pprint
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from pathlib import Path
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -23,13 +22,12 @@ import plotly.io as pio
 import cv2
 import pandas as pd
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from pathlib import Path
 from recording_processor import get_stream_name
+from spikeinterface.extractors import read_openephys_event
 
 
-sample_folder = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144")  # Path("/Users/vigji/Desktop/short_recording_oneshank/2025-01-22_16-56-15")
+
+sample_folder = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126")  # Path("/Users/vigji/Desktop/short_recording_oneshank/2025-01-22_16-56-15")
 assert sample_folder.exists()
 pprint(parse_folder_metadata(sample_folder))
 
@@ -38,7 +36,8 @@ from neuroconv.datainterfaces import SLEAPInterface
 from neuroconv.utils import dict_deep_update
 
 # Change the file_path so it points to the slp file in your system
-file_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144/videos/Object/multicam_video_2025-05-08T16_36_18_cropped_20250528161845/multicam_video_2025-05-08T16_36_18_centralpredictions.slp"  # sample_folder / "sleap" / "predictions_1.2.7_provenance_and_tracking.slp"
+file_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126/videos/cricket/multicam_video_2025-05-09T12_25_28_cropped_20250528161845/multicam_video_2025-05-09T12_25_28_centralpredictions.slp'  # sample_folder / "sleap" / "predictions_1.2.7_provenance_and_tracking.slp"
+assert Path(file_path).exists()
 interface = SLEAPInterface(file_path=file_path, verbose=False)
 # Then, run:
 # interface.set_aligned_timestamps
@@ -52,7 +51,7 @@ nwbfile_path = f"/Users/vigji/Desktop/delete_me.nwb"  # This should be something
 interface.run_conversion(nwbfile_path=nwbfile_path, metadata=metadata)
 
 # %%
-def get_timestamps_no_si(event_data_folder, recording_number=1, cam_ch=2):
+def get_timestamps_no_si_legacy(event_data_folder, recording_number=1, cam_ch=2):
     binary_data_folder_pattern = f"Record Node */experiment*/recording{recording_number}/events/NI-DAQmx-*.PXIe-6341/TTL"
     binary_data_folder = next(event_data_folder.glob(binary_data_folder_pattern))
 
@@ -66,23 +65,14 @@ def get_timestamps_no_si(event_data_folder, recording_number=1, cam_ch=2):
     video_trigger_times = timestamps[states == cam_ch]
     return video_trigger_times
 
-def get_timestamps_si(data_folder, recording_number=1, cam_ch=2):
-    event_data_folder_pattern = f"Record Node */experiment*/recording{recording_number}/events/NI-DAQmx-*.PXIe-6341/TTL"
-    print(data_folder, event_data_folder_pattern)
-    binary_data_folder = next(data_folder.glob(event_data_folder_pattern))
-    stream_name = binary_data_folder.parts[-2]
-
-    event_interface = OpenEphysBinaryEventExtractor(folder_path=data_folder, stream_id=stream_name)
-    return event_interface
-
-# get_timestamps_si(sample_folder, recording_number=1, cam_ch=2)
-# OpenEphysBinaryEventExtractor()
-from spikeinterface.extractors import OpenEphysBinaryEventExtractor
-f = list(sample_folder.glob("NPXData/2025-*"))[0]
-OpenEphysBinaryEventExtractor(folder_path=f)
 # %%
-
-
+def get_timestamps_si(data_folder, recording_number=1, cam_ch=2):
+    # f = '/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys _recordings/M29/2025-05-09_12-04-15'
+    event_interface = read_openephys_event(folder_path=f)
+    events = event_interface.get_events(channel_id='PXIe-6341Digital Input Line')
+    timestamps = np.array([v[0] for v in events])
+    channels = np.array([int(v[2]) for v in events])
+    return timestamps[channels == cam_ch]
 
 video_files = list(sample_folder.glob("videos/*/*.avi"))
 print(video_files)
@@ -95,6 +85,38 @@ def get_video_info(video_path):
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
     return frame_count
+
+is_split = False
+sample_folder = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144")  # Path("/Users/vigji/Desktop/short_recording_oneshank/2025-01-22_16-56-15")
+#sample_folder = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126")
+
+if not is_split:
+    MIN_T_TO_SPLIT = 10
+    recs_parent_folder_list = list(sample_folder.glob("NPXData/2025-*"))
+    assert len(recs_parent_folder_list) == 1
+    recs_parent_folder = recs_parent_folder_list[0]
+    recs_folder = list(recs_parent_folder.glob("Record Node */experiment*"))
+
+    if len(recs_folder) > 1:
+        print("Multiple recordings found")
+        cam_events_object = get_timestamps_si(recs_parent_folder, recording_number=1)
+        cam_events_cricket = get_timestamps_si(recs_parent_folder, recording_number=2)
+    else:
+        print("Single recording found, splitting camera trigger events")
+        all_events = get_timestamps_si(recs_parent_folder, recording_number=1)
+        delta_ts = np.diff(all_events)
+        video_split = np.argwhere(delta_ts > MIN_T_TO_SPLIT)[0, 0]
+        cam_events_object = all_events[:video_split]
+        cam_events_cricket = all_events[video_split:]
+
+    print(f"Video split: {video_split}")
+    print(f"Number of frames: {len(cam_events_object)}")
+# %%
+
+
+
+
+
 
 def get_timestamps_info(timestamps_path):
     df = pd.read_csv(timestamps_path)
