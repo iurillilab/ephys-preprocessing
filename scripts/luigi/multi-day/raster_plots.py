@@ -22,7 +22,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
-from neuroconv.datainterfaces import KiloSortSortingInterface, OpenEphysSortingInterface
+from neuroconv.datainterfaces import KiloSortSortingInterface, OpenEphysRecordingInterface
 # %%
 
 # create units table:
@@ -58,7 +58,7 @@ def dirty_nwb_like_loder(folder_path: Path) -> pd.DataFrame:
     # Change the folder_path to the location of the data in your system
     try:
         recording_folder = next((folder_path.parent / "NPXData").glob("2025-*"))
-        recording = OpenEphysSortingInterface(folder_path=recording_folder)  # read_openephys(recording_folder, stream_name=get_stream_name(recording_folder))
+        recording = OpenEphysRecordingInterface(folder_path=recording_folder, stream_name=get_stream_name(recording_folder))  # read_openephys(recording_folder, stream_name=get_stream_name(recording_folder))
     except StopIteration:
         print(f"No recording folder found in {folder_path.parent / 'NPXData'}. Won't use recording timestamps.")
         recording = None
