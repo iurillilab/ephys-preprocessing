@@ -1,82 +1,23 @@
 """Load data into NWB file, and save to disk."""
 
 # create units table:
-from spikeinterface.full import read_kilosort, load_sorting_analyzer
-from spikeinterface.extractors import read_openephys, read_openephys_event
+from datetime import datetime
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from neuroconv.datainterfaces import KiloSortSortingInterface, OpenEphysRecordingInterface, SLEAPInterface
-from recording_processor import get_stream_name
 import spikeinterface.curation as scur
+from neuroconv.datainterfaces import (KiloSortSortingInterface,
+                                      OpenEphysRecordingInterface,
+                                      SLEAPInterface)
 from neuroconv.utils import dict_deep_update
+from recording_processor import get_stream_name
+from spikeinterface.extractors import read_openephys, read_openephys_event
+from spikeinterface.full import load_sorting_analyzer, read_kilosort
+from timestamps_utils import get_video_timestamps
+from units_utils import load_units_df, spikes_interface_loder
 
-
-
-def _get_units_df(probe_sorted_units):
-    """Read dataframe of units info with position on the probe."""
-    templates = np.load(probe_sorted_units / "templates.npy")
-    units_df = pd.read_csv(probe_sorted_units / "cluster_KSLabel.tsv", sep="\t")
-    probe_channel_positions = np.load(probe_sorted_units / "channel_positions.npy")
-
-    peak_chan_idxs = templates.mean(1).argmax(1)
-    unit_channel_position = probe_channel_positions[peak_chan_idxs]
-    units_df["probe_x"] = unit_channel_position[:, 0]
-    units_df["probe_depth"] = unit_channel_position[:, 1]
-    units_df["probe_channel"] = peak_chan_idxs
-
-    return units_df
-
-def load_units_df(folder: Path) -> pd.DataFrame:
-    date = datetime.strptime(folder.parent.name.split("_")[0], "%Y-%m-%d")
-    mouse_id = folder.parent.parent.parent.name if "split" in folder.parent.parent.name else folder.parent.parent.name
-
-    analyzer = load_sorting_analyzer(folder / "analyser", format="binary_folder")
-    units_df = _get_units_df(folder / "sorter_output")
-    metrics = analyzer.get_extension(extension_name="quality_metrics").get_data()
-
-    units_df["recording_date"] = date
-    units_df["mouse_id"] = mouse_id
-    units_df = pd.concat([units_df, metrics], axis=1)
-    return units_df
-
-def spikes_interface_loder(folder_path: Path, overwrite: bool = False) -> pd.DataFrame:
-    # Change the folder_path to the location of the data in your system
-    try:
-        recording_folder = next((folder_path.parent / "NPXData").glob("2025-*"))
-        recording = OpenEphysRecordingInterface(folder_path=recording_folder, 
-                                                stream_name=get_stream_name(recording_folder),)
-                                                # block_index=0)  # read_openephys(recording_folder, stream_name=get_stream_name(recording_folder))
-        recording_extractor = read_openephys(recording_folder, 
-                                            stream_name=get_stream_name(recording_folder),
-                                            load_sync_timestamps=True)
-        recording.recording_extractor = recording_extractor
-    except StopIteration:
-        print(f"No recording folder found in {folder_path.parent / 'NPXData'}. Won't use recording timestamps.")
-        recording = None
-
-    # nwb_path = folder_path.parent / "sorter_output.nwb"
-
-    # if nwb_path.exists():
-    #     if overwrite:
-    #         nwb_path.unlink()
-    #     else: 
-    #         return nap.load_file(nwb_path)
-    times = recording_extractor.get_times()
-    # print(f"Times shape: {times.shape}, max: {np.max(times)}, min: {np.min(times)}")
-    ks_interface = KiloSortSortingInterface(folder_path=folder_path / "sorter_output", 
-                                         verbose=False,
-                                         keep_good_only=False)
-    ks_interface.sorting_extractor = scur.remove_excess_spikes(ks_interface.sorting_extractor, recording_extractor)
-    ks_interface.register_recording(recording)
-    # metadata = ks_interface.get_metadata()
-    # session_start_time = datetime(2020, 1, 1, 12, 30, 0, tzinfo=ZoneInfo("US/Pacific"))
-    # metadata["NWBFile"].update(session_start_time=session_start_time)
-    # ks_interface.run_conversion(nwbfile_path=nwb_path, metadata=metadata)
-    return ks_interface  # nap.load_file(nwb_path)
-
-example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126'
+example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
 data_folder = Path(example_path)
 # Read metadata from folder and subject log:
 # metadata = parse_folder_metadata(data_folder)
@@ -89,7 +30,7 @@ spikes_interface_loder(data_folder / "kilosort4")
 
 # Tracking data:
 # Change the file_path so it points to the slp file in your system
-file_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126/videos/cricket/multicam_video_2025-05-09T12_25_28_cropped_20250528161845/multicam_video_2025-05-09T12_25_28_centralpredictions.slp'  # sample_folder / "sleap" / "predictions_1.2.7_provenance_and_tracking.slp"
+file_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126/videos/cricket/multicam_video_2025-05-09T12_25_28_cropped_20250528161845/multicam_video_2025-05-09T12_25_28_centralpredictions.slp"  # sample_folder / "sleap" / "predictions_1.2.7_provenance_and_tracking.slp"
 assert Path(file_path).exists()
 interface = SLEAPInterface(file_path=file_path, verbose=False)
 
@@ -98,14 +39,6 @@ interface = SLEAPInterface(file_path=file_path, verbose=False)
 # interface.set_aligned_timestamps
 
 
-
 ########### Metadata ###########
 # metadata = interface.get_metadata()
 # metadata = dict_deep_update(metadata, parse_folder_metadata(sample_folder))
-
-
-
-
-
-
-
