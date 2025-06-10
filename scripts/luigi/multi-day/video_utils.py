@@ -1,4 +1,6 @@
-"""Script to concatenate videos for all chunks (object, cricket, roach) for one session."""
+"""Script to concatenate videos for all chunks (object, cricket, roach) for one session.
+DEPRECATED!
+"""
 
 
 import os
@@ -11,8 +13,9 @@ import numpy as np
 import pandas as pd
 
 
-def get_video_interface
-
+def get_video_interface(session_path):
+    """Get the video interface for a session."""
+    pass
 
 def concatenate_central_videos(session_folder):
     """Concatenate central videos from all session subfolders using ffmpeg.
@@ -97,15 +100,20 @@ def concatenate_central_videos(session_folder):
 if __name__ == "__main__":
     # Example usage - replace with your actual session path
     import sys
+    from tqdm import tqdm
     if len(sys.argv) > 1:
-        session_path = sys.argv[1]
+        main_path = Path(sys.argv[1])
     else:
-        session_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"
-        print(f"No path provided, using example: {session_path}")
+        main_path = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings")
+        print(f"No path provided, using example: {main_path}")
+
+    all_sessions = list(main_path.glob("M*_WT*/*/*")) 
+    for session_path in tqdm(all_sessions):
+        print(session_path)
+        try:
+            output_path = concatenate_central_videos(session_path)
+        except Exception as e:
+            print(f"Error: {e}")
     
-    try:
-        output_path = concatenate_central_videos(session_path)
-    except Exception as e:
-        print(f"Error: {e}")
 
 

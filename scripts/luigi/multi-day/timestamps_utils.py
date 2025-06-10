@@ -99,7 +99,7 @@ def get_video_timestamps(input_data_folder):
         print(
             f"Trimming session triggers from {len(session_triggers[i])} to {n_frames} frames"
         )
-        session_triggers[i] = session_triggers[i][:n_frames]
+        session_triggers[i] = session_triggers[i][:n_frames+2]
 
     return session_triggers, actual_sessions
 
