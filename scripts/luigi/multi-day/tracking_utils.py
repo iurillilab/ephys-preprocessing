@@ -3,8 +3,9 @@ import sys
 from pprint import pprint
 from timestamps_utils import get_video_timestamps
 from neuroconv import ConverterPipe
-from neuroconv.datainterfaces import SLEAPInterface, DeepLabCutInterface
+from neuroconv.datainterfaces import SLEAPInterface, DeepLabCutInterface, InternalVideoInterface
 import pandas as pd
+import numpy as np
 
 dlc_config_path_dict = {
         'cricket': Path('/Users/vigji/Desktop/cricket-below-Luigi Petrucco-2024-02-05/config.yaml'),
@@ -18,6 +19,7 @@ def load_video_interfaces(data_path: Path):
     all_video_timestamps, sessions_names = get_video_timestamps(data_path)
 
     interfaces_list = []
+    video_file_paths_list = []
     for session_name, video_timestamps in zip(sessions_names, all_video_timestamps):
         print(session_name)
         session_video_path = data_path / "videos" / session_name
@@ -36,12 +38,12 @@ def load_video_interfaces(data_path: Path):
         # Video file:
         video_file_path = next(slp_file_path.parent.glob("*central*.mp4"))
         assert video_file_path.exists(), f"Video file path {video_file_path} does not exist"
-
+        video_file_paths_list.append(str(video_file_path))
 
         # DLC interface:
         dlc_interface = DeepLabCutInterface(file_path=dlc_file_path, pose_estimation_metadata_key=f"PoseEstimationDeepLabCut{session_name.capitalize()}")#, config_file_path=video_file_path)
         dlc_df = pd.read_hdf(dlc_file_path, key="df_with_missing")
-        print(len(dlc_df), len(video_timestamps))
+        # print(len(dlc_df), len(video_timestamps))
         dlc_interface.set_aligned_timestamps(video_timestamps)
         
         # SLEAP interface:   
@@ -53,6 +55,16 @@ def load_video_interfaces(data_path: Path):
         # Order matters: need to add sleap first, then dlc
         interfaces_list.append(sleap_interface)
         interfaces_list.append(dlc_interface)
+
+        # Video interface:
+        print(video_file_path)
+        video_interface = InternalVideoInterface(file_path=video_file_path, 
+                                                 video_name=f"Video{session_name.capitalize()}",
+                                                 verbose=True)
+        video_interface.set_aligned_timestamps(all_video_timestamps[:-2])
+        interfaces_list.append(video_interface)
+
+    # conversion_options = {"VideoInterface": dict(starting_frames=[0, len(all_video_timestamps[0])])}
 
     return interfaces_list
 
