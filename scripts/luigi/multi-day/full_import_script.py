@@ -7,11 +7,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import spikeinterface.curation as scur
-from neuroconv.datainterfaces import (KiloSortSortingInterface,
-                                      OpenEphysRecordingInterface,
-                                      SLEAPInterface)
+from neuroconv.datainterfaces import SLEAPInterface
 from neuroconv.utils import dict_deep_update
-from recording_processor import get_stream_name
 from spikeinterface.extractors import read_openephys, read_openephys_event
 from spikeinterface.full import load_sorting_analyzer, read_kilosort
 from timestamps_utils import get_video_timestamps
