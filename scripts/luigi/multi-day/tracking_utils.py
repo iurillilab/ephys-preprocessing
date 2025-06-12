@@ -3,7 +3,7 @@ import sys
 from pprint import pprint
 from timestamps_utils import get_video_timestamps
 from neuroconv import ConverterPipe
-from neuroconv.datainterfaces import SLEAPInterface, DeepLabCutInterface, InternalVideoInterface
+from neuroconv.datainterfaces import SLEAPInterface, DeepLabCutInterface, ExternalVideoInterface
 import pandas as pd
 import numpy as np
 
@@ -56,17 +56,17 @@ def load_video_interfaces(data_path: Path):
         interfaces_list.append(sleap_interface)
         interfaces_list.append(dlc_interface)
 
-        # Video interface:
-        print(video_file_path)
-        video_interface = InternalVideoInterface(file_path=video_file_path, 
-                                                 video_name=f"Video{session_name.capitalize()}",
-                                                 verbose=True)
-        video_interface.set_aligned_timestamps(all_video_timestamps[:-2])
-        interfaces_list.append(video_interface)
+    # Video interface:
+    print(video_file_path)
+    video_interface = ExternalVideoInterface(file_paths=video_file_paths_list, 
+                                                video_name=f"BottomVideo",
+                                                verbose=True)
+    video_interface.set_aligned_timestamps(all_video_timestamps)
+    interfaces_list.append(video_interface)
 
-    # conversion_options = {"VideoInterface": dict(starting_frames=[0, len(all_video_timestamps[0])])}
+    conversion_options = {"ExternalVideoInterface": dict(starting_frames=np.array([0, len(all_video_timestamps[0])]))}
 
-    return interfaces_list
+    return interfaces_list, conversion_options
 
 
 
@@ -78,8 +78,8 @@ if __name__ == "__main__":
 
     nwb_path = data_path / "tracking_output.nwb"
     
-    interfaces_list = load_video_interfaces(data_path)
-    nwb_file = test_on_temp_nwb_file(ConverterPipe(interfaces_list), nwb_path)
+    interfaces_list, conversion_options = load_video_interfaces(data_path)
+    nwb_file = test_on_temp_nwb_file(ConverterPipe(interfaces_list), nwb_path, conversion_options)
     print(nwb_file)
         # print(video_timestamps)
     # print(video_timestamps)

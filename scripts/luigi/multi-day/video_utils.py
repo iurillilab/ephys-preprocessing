@@ -98,6 +98,83 @@ def find_and_remove_dummy_videos(videos_folder, min_size_mb=1, dry_run=True):
     return dummy_files
 
 
+def convert_mp4_to_avi(videos_folder, recursive=True, keep_original=True):
+    """Convert all MP4 files to AVI format using ffmpeg.
+    
+    Parameters
+    ----------
+    videos_folder : Path or str
+        Path to the folder containing MP4 files
+    recursive : bool
+        If True, search recursively in subfolders
+    keep_original : bool
+        If True, keep the original MP4 files after conversion
+        
+    Returns
+    -------
+    list
+        List of successfully converted files
+    """
+    videos_folder = Path(videos_folder)
+    
+    if not videos_folder.exists():
+        raise FileNotFoundError(f"Videos folder not found: {videos_folder}")
+    
+    # Find all MP4 files
+    if recursive:
+        mp4_files = list(videos_folder.rglob("*.mp4"))
+    else:
+        mp4_files = list(videos_folder.glob("*.mp4"))
+    
+    if not mp4_files:
+        print("No MP4 files found to convert")
+        return []
+    
+    print(f"Found {len(mp4_files)} MP4 files to convert")
+    converted_files = []
+    
+    for mp4_file in mp4_files:
+        # Create output AVI filename
+        avi_file = mp4_file.with_suffix('.avi')
+        
+        # Skip if AVI already exists
+        if avi_file.exists():
+            print(f"Skipping {mp4_file.name} - AVI already exists")
+            continue
+        
+        print(f"Converting: {mp4_file.name} -> {avi_file.name}")
+        
+        # ffmpeg command for conversion
+        cmd = [
+            'ffmpeg',
+            '-i', str(mp4_file),
+            '-c:v', 'libx264',  # Video codec
+            '-c:a', 'pcm_s16le',  # Audio codec
+            '-y',  # Overwrite output file if it exists
+            str(avi_file)
+        ]
+        
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print(f"Successfully converted: {avi_file.name}")
+                converted_files.append(avi_file)
+                
+                # Remove original if requested
+                if not keep_original:
+                    mp4_file.unlink()
+                    print(f"Removed original: {mp4_file.name}")
+            else:
+                print(f"Failed to convert {mp4_file.name}: {result.stderr}")
+                
+        except Exception as e:
+            print(f"Error converting {mp4_file.name}: {e}")
+    
+    print(f"Conversion complete. Successfully converted {len(converted_files)} files.")
+    return converted_files
+
+
 def get_video_interface(session_path):
     """Get the video interface for a session."""
     pass
@@ -200,22 +277,30 @@ def concatenate_central_videos(session_folder):
 
 
 if __name__ == "__main__":
-    # Example usage - replace with your actual session path
     import sys
-    from tqdm import tqdm
-    if len(sys.argv) > 1:
-        main_path = Path(sys.argv[1])
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "convert":
+        # Convert MP4s to AVI
+        target_folder = "/Users/vigji/Desktop/object_cricket_roach-YaduLuigi-2025-06-10/videos"
+        print(f"Converting MP4s to AVI in: {target_folder}")
+        converted_files = convert_mp4_to_avi(target_folder, recursive=True, keep_original=True)
+        
     else:
-        main_path = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings")
-        print(f"No path provided, using example: {main_path}")
+        # Original concatenation functionality
+        from tqdm import tqdm
+        if len(sys.argv) > 1:
+            main_path = Path(sys.argv[1])
+        else:
+            main_path = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings")
+            print(f"No path provided, using example: {main_path}")
 
-    all_sessions = list(main_path.glob("M*_WT*/*/*")) 
-    for session_path in tqdm(all_sessions):
-        print(session_path)
-        try:
-            output_path = concatenate_central_videos(session_path)
-        except Exception as e:
-            print(f"Error: {e}")
+        all_sessions = list(main_path.glob("M*_WT*/*/*")) 
+        for session_path in tqdm(all_sessions):
+            print(session_path)
+            try:
+                output_path = concatenate_central_videos(session_path)
+            except Exception as e:
+                print(f"Error: {e}")
     
 
 
