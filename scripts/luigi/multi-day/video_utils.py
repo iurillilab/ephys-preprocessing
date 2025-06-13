@@ -65,38 +65,6 @@ def check_video_health(video_path):
     return result
 
 
-def find_and_remove_dummy_videos(videos_folder, min_size_mb=1, dry_run=True):
-    """Find and optionally remove tiny video files that are likely dummy/corrupted.
-    
-    Parameters
-    ----------
-    videos_folder : Path or str
-        Path to the videos folder
-    min_size_mb : float
-        Minimum size in MB for a valid video file
-    dry_run : bool
-        If True, only print what would be removed without actually removing
-        
-    Returns
-    -------
-    list
-        List of files that were found (and removed if dry_run=False)
-    """
-    videos_folder = Path(videos_folder)
-    dummy_files = []
-    
-    for video_file in videos_folder.rglob("*.mp4"):
-        size_mb = video_file.stat().st_size / (1024 * 1024)
-        if size_mb < min_size_mb:
-            dummy_files.append(video_file)
-            if dry_run:
-                print(f"Would remove dummy file: {video_file} ({size_mb:.3f} MB)")
-            else:
-                print(f"Removing dummy file: {video_file} ({size_mb:.3f} MB)")
-                video_file.unlink()
-    
-    return dummy_files
-
 
 def convert_mp4_to_avi(videos_folder, recursive=True, keep_original=True):
     """Convert all MP4 files to AVI format using ffmpeg.
