@@ -105,13 +105,9 @@ def get_video_timestamps(input_data_folder):
 
 
 if __name__ == "__main__":
-    sample_folder = Path(
-        "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"
-    )  # Path("/Users/vigji/Desktop/short_recording_oneshank/2025-01-22_16-56-15")
-    sample_folder = Path(
-        "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
-    )
-
+    #sample_folder = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"
+    sample_folder = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
+    sample_folder = Path(sample_folder)
     session_triggers, actual_sessions = get_video_timestamps(sample_folder)
     print(actual_sessions)
     print(session_triggers)

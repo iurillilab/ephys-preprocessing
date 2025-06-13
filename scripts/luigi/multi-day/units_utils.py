@@ -8,7 +8,7 @@ from neuroconv.datainterfaces import (KiloSortSortingInterface,
                                       OpenEphysRecordingInterface)
 from recording_processor import get_stream_name
 from spikeinterface.extractors import read_openephys
-from spikeinterface.full import load_sorting_analyzer
+from spikeinterface.full import load_sorting_analyzer, concatenate_recordings
 import pynapple as nap
 from zoneinfo import ZoneInfo
 
@@ -56,12 +56,28 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
             folder_path=recording_folder,
             stream_name=get_stream_name(recording_folder),
         )
+        
         # block_index=0)  # read_openephys(recording_folder, stream_name=get_stream_name(recording_folder))
-        recording_extractor = read_openephys(
-            recording_folder,
-            stream_name=get_stream_name(recording_folder),
-            load_sync_timestamps=True,
-        )
+        recordings = []
+        for i, experiment_name in enumerate(["experiment1", "experiment2"]):
+            recording_extractor = read_openephys(
+                recording_folder,
+                stream_name=get_stream_name(recording_folder),
+                load_sync_timestamps=True,
+                #block_index=i,
+                experiment_names=["experiment1", "experiment2"]#experiment_name
+            )
+            recordings.append(recording_extractor)
+            # tstamps = recording_extractor.get_times()
+            #print("===========")
+            #print(f"Tstamps shape: {tstamps.shape}, min: {np.min(tstamps)}, max: {np.max(tstamps)}")
+            #print(f"Tstamps: {tstamps[-1] - tstamps[0]}")
+        recording_extractor = concatenate_recordings(recordings)
+        tstamps = recording_extractor.get_times()
+        print("===========after conctenation")
+        print(f"Tstamps shape: {tstamps.shape}, min: {np.min(tstamps)}, max: {np.max(tstamps)}")
+        print(f"Tstamps: {tstamps[-1] - tstamps[0]}")
+        print("===========")
         recording.recording_extractor = recording_extractor
     except StopIteration:
         print(
@@ -69,45 +85,40 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
         )
         recording = None
     
-    times = recording_extractor.get_times()
-    print(f"Times shape: {times.shape}, min: {np.min(times)}, max: {np.max(times)}")
+    try:
+        times = recording_extractor.get_times()
+        print(f"Times shape: {times.shape}, min: {np.min(times)}, max: {np.max(times)}")
+    except ValueError as e:
+        if "Multi-segment object" in str(e):
+            print(f"Multi-segment object issue: {e}")
+            # In this case, we have a multisegment issue
+        else:
+            raise e
+    
     ks_interface = KiloSortSortingInterface(
         folder_path=folder_path / "sorter_output", verbose=False, keep_good_only=False
     )
-    # Deal with stupid KS bug of fake spikes at negative or too high indexes
-    ks_interface.sorting_extractor = scur.remove_excess_spikes(
-        ks_interface.sorting_extractor, recording_extractor
-    )
+    # Deal with stupid KS bug of fake spikes at negative or too high indexes. maybe not bug, just an issue with 
+    # my stupid dummy local data!
+    for attr in ["get_duration", "get_total_duration", "get_end_time", "get_start_time"]:
+        print(attr, getattr(recording_extractor, attr)())
+    #ks_interface.sorting_extractor = scur.remove_excess_spikes(
+    #    ks_interface.sorting_extractor, recording_extractor
+    #)
     ks_interface.register_recording(recording)
     
     return ks_interface  # nap.load_file(nwb_path)
 
 
-def test_on_temp_nwb_file(input_data_folder: Path):
-    folder_path = Path(input_data_folder) / "kilosort4"
-    assert folder_path.exists(), f"Folder {folder_path} does not exist"
-    nwb_path = folder_path.parent / "sorter_output.nwb"
-    if nwb_path.exists():
-        nwb_path.unlink()
-    
-    ks_interface = KiloSortSortingInterface(
-        folder_path=folder_path / "sorter_output", verbose=False, keep_good_only=False
-    )
 
-    metadata = ks_interface.get_metadata()
-    session_start_time = datetime(2020, 1, 1, 12, 30, 0, tzinfo=ZoneInfo("US/Pacific"))
-    metadata["NWBFile"].update(session_start_time=session_start_time)
-    ks_interface.run_conversion(nwbfile_path=nwb_path, metadata=metadata)
-
-    nwb = nap.load_file(nwb_path)
-    return nwb
-
-
-if __name__ == "__main__":
-    # example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
+if  __name__ == "__main__":
+    from nwb_tester import test_on_temp_nwb_file
+    example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
     example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
     data_folder = Path(example_path)
-    nwb_file_data = test_on_temp_nwb_file(data_folder)
+    nwb_path = data_folder / "sorter_output.nwb"
+    interface = spikes_interface_loder(data_folder)
+    nwb_file_data = test_on_temp_nwb_file(interface, nwb_path)
     print(nwb_file_data)
     print("Successfully loaded spikes interface")
     good_units_mask = nwb_file_data["units"]["KSLabel"] == "good"
@@ -121,7 +132,14 @@ if __name__ == "__main__":
         "Last spike time: ",
         np.max(good_units_tsd.t),
     )
-    # Read metadata from folder and subject log:
-    # metadata = parse_folder_metadata(data_folder)
-    # units_df = load_units_df(data_folder / "kilosort4")
-    # print(units_df)
+
+# if __name__ == "__main__":
+    npy_file = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144/NPXData/2025-05-08_16-36-04/Record Node 107/experiment1/recording1/continuous/Neuropix-PXI-100.ProbeA/timestamps.npy'
+    vector = np.load(npy_file)
+    print(vector.shape)
+    print(vector[:10])
+    print(vector[-10:])
+    print(vector[0])
+    print(vector[-1])
+    print(vector[0] - vector[-1])
+    print(vector[0] - vector[-1])

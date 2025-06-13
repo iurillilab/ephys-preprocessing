@@ -20,8 +20,6 @@ from nwb_conv import parse_folder_metadata
 example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
 example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"
 data_folder = Path(example_path)
-# Read metadata from folder and subject log:
-metadata = parse_folder_metadata(data_folder)
 
 ########### Spikes ###########
 spikes_interface = spikes_interface_loder(data_folder)
@@ -36,10 +34,13 @@ video_interfaces = load_video_interfaces( data_folder )
 
 
 
-interface = ConverterPipe([spikes_interface] + video_interfaces)
+interface = ConverterPipe([spikes_interface,] + video_interfaces)
 ########### Metadata ###########
 interface_metadata = interface.get_metadata()
-metadata = dict_deep_update(interface_metadata, metadata)
+
+# Read metadata from folder and subject log:
+# metadata = parse_folder_metadata(data_folder)
+# metadata = dict_deep_update(interface_metadata, metadata)
 
 data = test_on_temp_nwb_file(interface, data_folder / "full_output.nwb")
 print(data)
