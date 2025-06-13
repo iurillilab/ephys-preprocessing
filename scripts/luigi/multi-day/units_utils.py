@@ -46,6 +46,29 @@ def load_units_df(folder: Path) -> pd.DataFrame:
     return units_df
 
 
+def read_patched_openephys(recording_folder):
+    # My eyes have never bled this much
+    recording_extractor = read_openephys(recording_folder, stream_name=get_stream_name(recording_folder), load_sync_timestamps=True)
+
+    all_timestamps = []
+    if recording_extractor.get_num_segments() > 1:
+        patched_recording_extractor = read_openephys(recording_folder, 
+                                                     stream_name=get_stream_name(recording_folder), 
+                                                     experiment_names=["experiment1", "experiment2"],
+                                                     load_sync_timestamps=False)
+        for segment_index in range(recording_extractor.get_num_segments()):
+            all_timestamps.append(recording_extractor.get_times(segment_index=segment_index))
+
+        global concatenated_times
+        concatenated_times = np.concatenate(all_timestamps)
+        def _get_times(segment_index=0):
+            return concatenated_times
+        patched_recording_extractor.get_times = _get_times
+        recording_extractor = patched_recording_extractor
+
+    return recording_extractor
+
+
 def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
     folder_path = Path(input_data_folder) / "kilosort4"
     assert folder_path.exists(), f"Folder {folder_path} does not exist"
@@ -56,28 +79,16 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
             folder_path=recording_folder,
             stream_name=get_stream_name(recording_folder),
         )
-        
-        # block_index=0)  # read_openephys(recording_folder, stream_name=get_stream_name(recording_folder))
-        recordings = []
-        for i, experiment_name in enumerate(["experiment1", "experiment2"]):
-            recording_extractor = read_openephys(
-                recording_folder,
-                stream_name=get_stream_name(recording_folder),
-                load_sync_timestamps=True,
-                #block_index=i,
-                experiment_names=["experiment1", "experiment2"]#experiment_name
-            )
-            recordings.append(recording_extractor)
-            # tstamps = recording_extractor.get_times()
-            #print("===========")
-            #print(f"Tstamps shape: {tstamps.shape}, min: {np.min(tstamps)}, max: {np.max(tstamps)}")
-            #print(f"Tstamps: {tstamps[-1] - tstamps[0]}")
-        recording_extractor = concatenate_recordings(recordings)
-        tstamps = recording_extractor.get_times()
-        print("===========after conctenation")
-        print(f"Tstamps shape: {tstamps.shape}, min: {np.min(tstamps)}, max: {np.max(tstamps)}")
-        print(f"Tstamps: {tstamps[-1] - tstamps[0]}")
-        print("===========")
+        recording_extractor = read_patched_openephys(recording_folder)
+        # recording_extractor = read_openephys(
+        #         recording_folder,
+        #         stream_name=get_stream_name(recording_folder),
+        #         load_sync_timestamps=True,
+        #         #block_index=i,
+        #         # experiment_names=["experiment1", "experiment2"]#experiment_name
+        #     )
+            
+        # tstamps = recording_extractor.get_times()
         recording.recording_extractor = recording_extractor
     except StopIteration:
         print(
@@ -100,11 +111,17 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
     )
     # Deal with stupid KS bug of fake spikes at negative or too high indexes. maybe not bug, just an issue with 
     # my stupid dummy local data!
-    for attr in ["get_duration", "get_total_duration", "get_end_time", "get_start_time"]:
-        print(attr, getattr(recording_extractor, attr)())
+    # for attr in ["get_duration", "get_total_duration", "get_end_time", "get_start_time"]:
+      #   print(attr, getattr(recording_extractor, attr)())
     #ks_interface.sorting_extractor = scur.remove_excess_spikes(
     #    ks_interface.sorting_extractor, recording_extractor
-    #)
+    # )
+    # AAAAAAARAAARGGGGGGHHHH  this come with the monkeypatch. No way of reading a 1-segment without concatenating otherwise
+    print(f"Recording num segments: {recording.recording_extractor.get_num_segments()}")
+    print(f"KS num segments: {ks_interface.sorting_extractor.get_num_segments()}")
+    recording.recording_extractor.get_num_segments = lambda: ks_interface.sorting_extractor.get_num_segments()
+    print(f"Recording num segments: {recording_extractor.get_num_segments()}")
+    print(f"KS num segments: {ks_interface.sorting_extractor.get_num_segments()}")
     ks_interface.register_recording(recording)
     
     return ks_interface  # nap.load_file(nwb_path)
