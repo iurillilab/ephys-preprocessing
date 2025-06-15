@@ -39,9 +39,10 @@ def load_video_interfaces(data_path: Path):
             dlc_files = sorted(list(session_video_path.glob(f"multicam_video_*_*/*{model_name}*.h5")))
             assert len(dlc_files) == 1, f"Expected 1 DLC file, got {len(dlc_files)}"
 
+            metadata_key = f"PoseEstimationDeepLabCutSession{session_name.capitalize()}Entity{model_name.capitalize()}"
             dlc_interface = DeepLabCutInterface(file_path=dlc_files[0], 
                                                 config_file_path=dlc_config_path_dict[model_name],
-                                                pose_estimation_metadata_key=f"PoseEstimationDeepLabCut{session_name.capitalize()}{model_name.capitalize()}")#, config_file_path=video_file_path)
+                                                pose_estimation_metadata_key=metadata_key)#, config_file_path=video_file_path)
             dlc_df = pd.read_hdf(dlc_files[0], key="df_with_missing")
 
             # TODO fix this abomination:

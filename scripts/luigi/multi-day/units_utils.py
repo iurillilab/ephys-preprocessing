@@ -109,19 +109,17 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
     ks_interface = KiloSortSortingInterface(
         folder_path=folder_path / "sorter_output", verbose=False, keep_good_only=False
     )
-    # Deal with stupid KS bug of fake spikes at negative or too high indexes. maybe not bug, just an issue with 
+    # Deal with stupid KS bug of fake spikes at negative or too high indexes. 
+    # There seems to be a bug, the resulting trace is too short. Maybe not bug, just an issue with 
     # my stupid dummy local data!
+    
     # for attr in ["get_duration", "get_total_duration", "get_end_time", "get_start_time"]:
       #   print(attr, getattr(recording_extractor, attr)())
     #ks_interface.sorting_extractor = scur.remove_excess_spikes(
     #    ks_interface.sorting_extractor, recording_extractor
     # )
     # AAAAAAARAAARGGGGGGHHHH  this come with the monkeypatch. No way of reading a 1-segment without concatenating otherwise
-    print(f"Recording num segments: {recording.recording_extractor.get_num_segments()}")
-    print(f"KS num segments: {ks_interface.sorting_extractor.get_num_segments()}")
     recording.recording_extractor.get_num_segments = lambda: ks_interface.sorting_extractor.get_num_segments()
-    print(f"Recording num segments: {recording_extractor.get_num_segments()}")
-    print(f"KS num segments: {ks_interface.sorting_extractor.get_num_segments()}")
     ks_interface.register_recording(recording)
     
     return ks_interface  # nap.load_file(nwb_path)
@@ -131,7 +129,7 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
 if  __name__ == "__main__":
     from nwb_tester import test_on_temp_nwb_file
     example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
-    example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
+    #example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
     data_folder = Path(example_path)
     nwb_path = data_folder / "sorter_output.nwb"
     interface = spikes_interface_loder(data_folder)

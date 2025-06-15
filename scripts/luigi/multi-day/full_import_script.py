@@ -23,6 +23,7 @@ data_folder = Path(example_path)
 
 ########### Spikes ###########
 spikes_interface = spikes_interface_loder(data_folder)
+print(type(spikes_interface))
 
 ########### Behavior ###########
 # Tracking data:
@@ -30,17 +31,19 @@ spikes_interface = spikes_interface_loder(data_folder)
 # interfaces_list = load_video_interfaces(data_folder)
 
 ########### Videos ###########
-video_interfaces = load_video_interfaces( data_folder )
+video_interfaces, conv_options = load_video_interfaces(data_folder )
 
-
-
-interface = ConverterPipe([spikes_interface,] + video_interfaces)
+print(conv_options)
+full_interfaces_list = [spikes_interface, *video_interfaces]
+interface = ConverterPipe(full_interfaces_list)
 ########### Metadata ###########
-interface_metadata = interface.get_metadata()
+
+interface_metadata = spikes_interface.get_metadata()
 
 # Read metadata from folder and subject log:
 # metadata = parse_folder_metadata(data_folder)
 # metadata = dict_deep_update(interface_metadata, metadata)
 
-data = test_on_temp_nwb_file(interface, data_folder / "full_output.nwb")
+data = test_on_temp_nwb_file(interface, data_folder / "test_full_output.nwb", 
+                             conversion_options=conv_options)
 print(data)
