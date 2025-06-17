@@ -17,33 +17,35 @@ from tracking_utils import load_video_interfaces
 from neuroconv import ConverterPipe
 from nwb_conv import parse_folder_metadata
 
-example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
-example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"
-data_folder = Path(example_path)
+example_paths = [
+ "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126",
+"/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"]
+for example_path in example_paths:
+    data_folder = Path(example_path)
 
-########### Spikes ###########
-spikes_interface = spikes_interface_loder(data_folder)
-print(type(spikes_interface))
+    ########### Spikes ###########
+    spikes_interface = spikes_interface_loder(data_folder)
+    print(type(spikes_interface))
 
-########### Behavior ###########
-# Tracking data:
-# Change the file_path so it points to the slp file in your system
-# interfaces_list = load_video_interfaces(data_folder)
+    ########### Behavior ###########
+    # Tracking data:
+    # Change the file_path so it points to the slp file in your system
+    # interfaces_list = load_video_interfaces(data_folder)
 
-########### Videos ###########
-video_interfaces, conv_options = load_video_interfaces(data_folder )
+    ########### Videos ###########
+    video_interfaces, conv_options = load_video_interfaces(data_folder )
 
-print(conv_options)
-full_interfaces_list = [spikes_interface, *video_interfaces]
-interface = ConverterPipe(full_interfaces_list)
-########### Metadata ###########
+    print(conv_options)
+    full_interfaces_list = [spikes_interface, *video_interfaces]
+    interface = ConverterPipe(full_interfaces_list)
+    ########### Metadata ###########
 
-interface_metadata = spikes_interface.get_metadata()
+    interface_metadata = spikes_interface.get_metadata()
 
-# Read metadata from folder and subject log:
-# metadata = parse_folder_metadata(data_folder)
-# metadata = dict_deep_update(interface_metadata, metadata)
+    # Read metadata from folder and subject log:
+    # metadata = parse_folder_metadata(data_folder)
+    # metadata = dict_deep_update(interface_metadata, metadata)
 
-data = test_on_temp_nwb_file(interface, data_folder / "test_full_output.nwb", 
-                             conversion_options=conv_options)
-print(data)
+    data = test_on_temp_nwb_file(interface, data_folder / "test_full_output.nwb", 
+                                conversion_options=conv_options)
+    print(data)

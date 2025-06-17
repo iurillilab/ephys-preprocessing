@@ -37,7 +37,7 @@ def load_video_interfaces(data_path: Path):
             print(session_video_path)
             print(list(session_video_path.glob("multicam_video_*_*/*.h5")))
             dlc_files = sorted(list(session_video_path.glob(f"multicam_video_*_*/*{model_name}*.h5")))
-            assert len(dlc_files) == 1, f"Expected 1 DLC file, got {len(dlc_files)}"
+            assert len(dlc_files) == 1, f"Expected 1 DLC file, got {len(dlc_files)} in {session_video_path}"
 
             metadata_key = f"PoseEstimationDeepLabCutSession{session_name.capitalize()}Entity{model_name.capitalize()}"
             dlc_interface = DeepLabCutInterface(file_path=dlc_files[0], 
