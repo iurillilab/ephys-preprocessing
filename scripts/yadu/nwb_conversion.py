@@ -1,13 +1,17 @@
 #%%
-%matplotlib widget
+# %matplotlib inline 
 from datetime import datetime
 import matplotlib.pyplot as plt
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import numpy as np
+import neuroconv as nwb_conv
 
 from neuroconv.datainterfaces import KiloSortSortingInterface
 print('hello world')
+#%%
+from nwb_conv import check_lablogs_location
+check_lablogs_location()
 #%%
 
 folder_path = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4\sorter_output'
