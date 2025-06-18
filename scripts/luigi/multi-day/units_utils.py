@@ -46,6 +46,24 @@ def load_units_df(folder: Path) -> pd.DataFrame:
     return units_df
 
 
+def read_patched_openephys_folders(recording_folders):
+    if len(recording_folders) == 1:
+        return read_patched_openephys(recording_folders[0])
+    else:
+        all_extractors = [read_patched_openephys(recording_folder) for recording_folder in recording_folders]
+    
+    global concatenated_times
+    concatenated_times = np.concatenate([extractor.get_times() for extractor in all_extractors])
+    
+    def _get_times(segment_index=0):
+        return concatenated_times
+    
+    patched_recording_extractor = all_extractors[0]
+    patched_recording_extractor.get_times = _get_times
+
+    return patched_recording_extractor
+
+
 def read_patched_openephys(recording_folder):
     # My eyes have never bled this much
     recording_extractor = read_openephys(recording_folder, stream_name=get_stream_name(recording_folder), load_sync_timestamps=True)
@@ -134,7 +152,7 @@ if  __name__ == "__main__":
     #example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
     example_main_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/")
     assert example_main_path.exists(), f"Folder {example_main_path} does not exist"
-    all_paths_to_test = list(example_main_path.glob("M3*_WT002/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9][0-9][0-9]"))
+    all_paths_to_test = sorted(list(example_main_path.glob("M*_WT002/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9][0-9][0-9]")))
     pprint(all_paths_to_test)
     for example_path in all_paths_to_test:
         print("-"*100)
