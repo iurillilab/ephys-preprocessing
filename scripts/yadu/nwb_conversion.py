@@ -46,3 +46,8 @@ plt.show()
 
 # %%
 # %%
+from nwb_conv.behavior_utils import (
+    load_video_and_dlc_interfaces,
+    load_video_info_dict,
+    update_metadata_with_video_dicts,
+)
