@@ -128,33 +128,40 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
 
 if  __name__ == "__main__":
     from nwb_tester import test_on_temp_nwb_file
-    example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
+    from time import time
+    from pprint import pprint
+    # example_path = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126"
     #example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
-    data_folder = Path(example_path)
-    nwb_path = data_folder / "sorter_output.nwb"
-    interface = spikes_interface_loder(data_folder)
-    nwb_file_data = test_on_temp_nwb_file(interface, nwb_path)
-    print(nwb_file_data)
-    print("Successfully loaded spikes interface")
-    good_units_mask = nwb_file_data["units"]["KSLabel"] == "good"
+    example_main_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/")
+    assert example_main_path.exists(), f"Folder {example_main_path} does not exist"
+    all_paths_to_test = list(example_main_path.glob("M3*_WT002/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9][0-9][0-9]"))
+    pprint(all_paths_to_test)
+    for example_path in all_paths_to_test:
+        print("-"*100)
+        print(example_path)
+        try:
+            start_time = time()
+            # example_path = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M29_WT002/20250508/155144"
+            
+            
+            data_folder = Path(example_path)
+            assert data_folder.exists(), f"Folder {data_folder} does not exist"
+            nwb_path = data_folder / "sorter_output.nwb"
+            interface = spikes_interface_loder(data_folder)
+            nwb_file_data = test_on_temp_nwb_file(interface, nwb_path)
+            print(nwb_file_data)
+            print("Successfully loaded spikes interface")
+            good_units_mask = nwb_file_data["units"]["KSLabel"] == "good"
 
-    good_units = nwb_file_data["units"]#[good_units_mask]
-    good_units_tsd = good_units.to_tsd()
-    print(f"Converted to Tsd with shape: {good_units_tsd.shape}")
-    print(
-        "First spike time: ",
-        np.min(good_units_tsd.t),
-        "Last spike time: ",
-        np.max(good_units_tsd.t),
-    )
-
-# if __name__ == "__main__":
-    npy_file = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144/NPXData/2025-05-08_16-36-04/Record Node 107/experiment1/recording1/continuous/Neuropix-PXI-100.ProbeA/timestamps.npy'
-    vector = np.load(npy_file)
-    print(vector.shape)
-    print(vector[:10])
-    print(vector[-10:])
-    print(vector[0])
-    print(vector[-1])
-    print(vector[0] - vector[-1])
-    print(vector[0] - vector[-1])
+            good_units = nwb_file_data["units"]#[good_units_mask]
+            good_units_tsd = good_units.to_tsd()
+            print(f"Converted to Tsd with shape: {good_units_tsd.shape}")
+            print(
+                "First spike time: ",
+                np.min(good_units_tsd.t),
+                "Last spike time: ",
+                np.max(good_units_tsd.t),
+            )
+        except Exception as e:
+            print(f"Error loading spikes interface: {e}")
+        print(f"Time taken: {time() - start_time} seconds")
