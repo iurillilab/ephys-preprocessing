@@ -14,14 +14,15 @@ from nwb_conv import check_lablogs_location
 check_lablogs_location()
 #%%
 
-folder_path = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4\sorter_output'
+parent_path = Path(r'D:\Anaesthetised')
+probe_sorted_units_path = parent_path / 'M26_D879' / '20250307' / 'kilosort4' / 'sorter_output'
 # Change the folder_path to the location of the data in your system
-interface = KiloSortSortingInterface(folder_path=folder_path, verbose=False)
+interface = KiloSortSortingInterface(folder_path=probe_sorted_units_path, verbose=False)
 
 metadata = interface.get_metadata()
-session_start_time = datetime(2020, 1, 1, 12, 30, 0, tzinfo=ZoneInfo("US/Pacific"))
+session_start_time = datetime(2025, 3, 7, 16, 45, 0, tzinfo=ZoneInfo("US/Pacific"))
 metadata["NWBFile"].update(session_start_time=session_start_time)
-nwbfile_path = r'Y:\20250124\M20\test_npx1\2025-01-24_19-56-04\Record Node 102\experiment1\recording1\continuous\Neuropix-PXI-100.ProbeB-AP\kilosort4\test.nwb'
+nwbfile_path = parent_path / 'M26_D879' / '20250307' / 'recording.nwb'
 interface.run_conversion(nwbfile_path=nwbfile_path, metadata=metadata)
 # %%
 import pynapple as nap
@@ -46,3 +47,8 @@ plt.show()
 
 # %%
 # %%
+from nwb_conv.behavior_utils import (
+    load_video_and_dlc_interfaces,
+    load_video_info_dict,
+    update_metadata_with_video_dicts,
+)
