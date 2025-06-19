@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import spikeinterface.curation as scur
+from spikeinterface.core import BaseSorting
 from neuroconv.datainterfaces import (KiloSortSortingInterface,
                                       OpenEphysRecordingInterface)
 from recording_processor import get_stream_name
@@ -53,7 +54,16 @@ def read_patched_openephys_folders(recording_folders):
         all_extractors = [read_patched_openephys(recording_folder) for recording_folder in recording_folders]
     
     global concatenated_times
-    concatenated_times = np.concatenate([extractor.get_times() for extractor in all_extractors])
+    prev_interface_tstart = 0
+    to_concatenate = []
+    for extractor in all_extractors:
+        print(extractor.get_times()[0], extractor.get_times()[-1])
+        new_tstamps = extractor.get_times() + prev_interface_tstart
+        print(new_tstamps[0], new_tstamps[-1])
+        to_concatenate.append(new_tstamps)
+        prev_interface_tstart = new_tstamps[-1]
+    concatenated_times = np.concatenate(to_concatenate)
+    print(concatenated_times[0], concatenated_times[-1])
     
     def _get_times(segment_index=0):
         return concatenated_times
@@ -92,12 +102,13 @@ def spikes_interface_loder(input_data_folder: Path) -> pd.DataFrame:
     assert folder_path.exists(), f"Folder {folder_path} does not exist"
     # Change the folder_path to the location of the data in your system
     try:
-        recording_folder = next((folder_path.parent / "NPXData").glob("2025-*"))
+        recording_folders_list = sorted(list((folder_path.parent / "NPXData").glob("2025-*")))
+        recording_folder = recording_folders_list[0]
         recording = OpenEphysRecordingInterface(
             folder_path=recording_folder,
             stream_name=get_stream_name(recording_folder),
         )
-        recording_extractor = read_patched_openephys(recording_folder)
+        recording_extractor = read_patched_openephys_folders(recording_folders_list)
         # recording_extractor = read_openephys(
         #         recording_folder,
         #         stream_name=get_stream_name(recording_folder),
@@ -152,7 +163,7 @@ if  __name__ == "__main__":
     #example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
     example_main_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/")
     assert example_main_path.exists(), f"Folder {example_main_path} does not exist"
-    all_paths_to_test = sorted(list(example_main_path.glob("M*_WT002/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9][0-9][0-9]")))
+    all_paths_to_test = sorted(list(example_main_path.glob("M3*_WT002/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9][0-9][0-9]")))
     pprint(all_paths_to_test)
     for example_path in all_paths_to_test:
         print("-"*100)
