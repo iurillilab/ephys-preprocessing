@@ -7,6 +7,9 @@ import pandas as pd
 from nwb_conv import parse_folder_metadata
 from spikeinterface.extractors import read_openephys_event
 
+
+MIN_T_TO_SPLIT = 5
+MIN_SEGMENT_LENGTH = 3000
 # %%
 
 
@@ -25,6 +28,44 @@ def get_video_info(video_path):
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
     return frame_count
+
+
+def split_session_triggers(session_triggers, min_t_to_split=MIN_T_TO_SPLIT):
+    """Split triggers based on gaps in the triggers.
+    
+    Parameters
+    ----------
+    session_triggers : np.ndarray
+        Array of trigger timestamps
+    min_t_to_split : float
+        Minimum time gap to consider a split (in seconds)
+        
+    Returns
+    -------
+    list of np.ndarray
+        List of trigger arrays, one for each session
+    """
+    delta_ts = np.diff(session_triggers)
+    split_indices = np.argwhere(delta_ts > min_t_to_split).flatten()
+    
+    if len(split_indices) == 0:
+        raise ValueError("No splits found!")
+    
+    # Convert to split points (add 1 because diff shifts indices)
+    split_points = split_indices + 1
+    
+    # Create list of session trigger arrays
+    sessions = []
+    start_idx = 0
+    
+    for split_point in split_points:
+        sessions.append(session_triggers[start_idx:split_point])
+        start_idx = split_point
+    
+    # Add the final session (from last split to end)
+    sessions.append(session_triggers[start_idx:])
+    
+    return sessions
 
 
 def get_video_timestamps(input_data_folder):
@@ -49,19 +90,33 @@ def get_video_timestamps(input_data_folder):
     # TODO: still missing the case of two separate recordings!
     is_split = False
 
-    MIN_T_TO_SPLIT = 10
+    
     possible_sessions = ["object", "cricket", "roach"]
-    # cam_events = {cam_name: None for cam_name in possible_sessions}
-    video_files = list(input_data_folder.glob("videos/*/*.avi"))
+
+    video_files = sorted(list(input_data_folder.glob("videos/*/*.avi")))
     video_files.sort(key=lambda x: x.name)  # sort by filename with timestamp
-    print(video_files)
     actual_sessions = [v.parts[-2] for v in video_files]
+
+    # this part is to deal with multiple video folders for the same session when camera was started multiple times
+    more_video_files = list(input_data_folder.glob("videos/*/*/*.avi"))
+    more_video_files.sort(key=lambda x: x.name)  # sort by filename with timestamp
+    more_actual_sessions = [v.parts[-3] for v in more_video_files]
+    actual_sessions = actual_sessions + more_actual_sessions
+
+
     assert set(actual_sessions).issubset(
         set(possible_sessions)
     ), f"Session should be one of {possible_sessions}. From video I see: {set(actual_sessions)}"
-    assert (
-        len(set(actual_sessions)) == 2
-    ), f"Only 2 session types is supported for now. From video I see: {set(actual_sessions)}"
+    # assert len()
+    print(actual_sessions)
+    if len(set(actual_sessions)) >= 2:
+        print("!!!!!!!!!! warning !!!!!!!!!!")
+        print(f"Usuall 2 session types is supported for now. From video I see: {set(actual_sessions)}")
+        print("I assume this is a special case with a prolonged acquisition")
+    #else:
+    #    assert (
+    #        len(set(actual_sessions)) == 2
+    #    ), f"Usuall 2 session types is supported for now. From video I see: {set(actual_sessions)}"
     print(f"Sessions: {actual_sessions}")
 
     npx_data_folders = list(input_data_folder.glob("NPXData/2025-*"))
@@ -69,7 +124,8 @@ def get_video_timestamps(input_data_folder):
     assert len(npx_data_folders) <= 2, f"Expected 2 NPX data folders, got {len(npx_data_folders)}"
     is_split = len(npx_data_folders) == 2
     session_triggers = []
-    print(npx_data_folders)
+    # print(npx_data_folders)
+
     # TODO: right now this is a tangled mess, but we have to deal with many possible cases...
     if is_split:
         session_triggers = []
@@ -109,9 +165,15 @@ def get_video_timestamps(input_data_folder):
         else:
             print("Single recording found, splitting camera trigger events")
             all_events = get_timestamps_si(npx_data_folder)
-            delta_ts = np.diff(all_events)
-            video_split = np.argwhere(delta_ts > MIN_T_TO_SPLIT)[0, 0] + 1
-            session_triggers = [all_events[:video_split], all_events[video_split:]]
+            
+            np.save("all_events.npy", all_events)
+
+            session_triggers = split_session_triggers(all_events)
+            print(f"Found {len(session_triggers)} sessions triggers of length:")
+            print([len(t) for t in session_triggers])
+            session_triggers = [t for t in session_triggers if len(t) > MIN_SEGMENT_LENGTH]
+            print(f"After filtering, found {len(session_triggers)} sessions triggers of length:")
+            print([len(t) for t in session_triggers])
 
     assert len(session_triggers) == len(
         actual_sessions
@@ -147,13 +209,14 @@ def get_video_timestamps(input_data_folder):
 
     return session_triggers, actual_sessions
 
-
+# %%
 if __name__ == "__main__":
-    #sample_folder = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"
-    sample_folder = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M29_WT002/20250507/100459"
+    #sample_folder = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"    # sample_folder = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250513/103449"
+    sample_folder = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250511/164220"
     sample_folder = Path(sample_folder)
     session_triggers, actual_sessions = get_video_timestamps(sample_folder)
     print(actual_sessions)
-    print(session_triggers)
+    #fname = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250511/164220/NPXData/2025-05-11_17-21-59"    
+    #tstamps = get_timestamps_si(fname)
 
 # %%

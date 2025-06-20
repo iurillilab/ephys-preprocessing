@@ -73,3 +73,8 @@ t = np.load('/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_
 print(len(t), t[0], t[-1], t[-1] - t[0])
 
 # %%
+t = np.load("/Users/vigji/code/ephys-preprocessing/all_events.npy")
+# %%
+plt.figure()
+plt.plot(np.diff(t))
+# %%
