@@ -1,5 +1,4 @@
 #%%
-%matplotlib inline
 import spikeinterface.extractors as se
 from pathlib import Path
 import numpy as np
