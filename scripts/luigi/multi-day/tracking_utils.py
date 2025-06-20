@@ -8,16 +8,20 @@ import pandas as pd
 import numpy as np
 
 dlc_config_path_dict = {
-        'cricket': Path('/Users/vigji/Desktop/all_dlc_models/dlc3_cricket-YaduLuigi-2025-06-10/config.yaml'),
-        'mouse': Path('/Users/vigji/Desktop/all_dlc_models/dlc3_mouse-YaduLuigi-2025-06-10/config.yaml'), 
-        'roach': Path('/Users/vigji/Desktop/all_dlc_models/dlc3_roach-YaduLuigi-2025-06-10/config.yaml'),
-        'object': Path('/Users/vigji/Desktop/all_dlc_models/dlc3_object-YaduLuigi-2025-06-10/config.yaml'),
+        'cricket': Path('/Users/vigji/Desktop/final_models/dlc3_cricket-YaduLuigi-2025-06-10/config.yaml'),
+        # 'mouse': Path('/Users/vigji/Desktop/final_models/dlc3_mouse-YaduLuigi-2025-06-10/config.yaml'), 
+        'mouse': Path('/Users/vigji/Desktop/final_models/mouse-bottom-new/config.yaml'), 
+        'roach': Path('/Users/vigji/Desktop/final_models/dlc3_roach-YaduLuigi-2025-06-10/config.yaml'),
+        'object': Path('/Users/vigji/Desktop/final_models/dlc3_object-YaduLuigi-2025-06-10/config.yaml'),
     }
 
 def load_video_interfaces(data_path: Path):
     """Load the video interface for a video."""
 
     all_video_timestamps, sessions_names = get_video_timestamps(data_path)
+
+    # Funny patch requires because M29 on 20250507 was dropping one every 2 frames in the first session:
+    # print(str(data_path))
 
     interfaces_list = []
     video_file_paths_list = []
@@ -87,51 +91,16 @@ def load_video_interfaces(data_path: Path):
     return interfaces_list, conversion_options
 
 
-
-
 if __name__ == "__main__":
     from nwb_tester import test_on_temp_nwb_file
     #  = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126/videos/cricket/multicam_video_2025-05-09T12_25_28_cropped_20250528161845/multicam_video_2025-05-09T12_25_28_centralpredictions.slp'
     # data_path = Path('/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126')
-    data_path = Path('/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144')
+    main_data_path = Path('/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings')
+    data_paths = sorted(list(main_data_path.glob("M*_WT*/*/[0-9][0-9][0-9][0-9][0-9][0-9]")))    
+    for data_path in data_paths:
+        print(data_path)
+        nwb_path = data_path / "tracking_output.nwb"
+        interfaces_list, conversion_options = load_video_interfaces(data_path)
+        nwb_file = test_on_temp_nwb_file(ConverterPipe(interfaces_list), nwb_path, conversion_options)
+        print(nwb_file)
 
-    nwb_path = data_path / "tracking_output.nwb"
-    
-    interfaces_list, conversion_options = load_video_interfaces(data_path)
-    nwb_file = test_on_temp_nwb_file(ConverterPipe(interfaces_list), nwb_path, conversion_options)
-    print(nwb_file)
-        # print(video_timestamps)
-    # print(video_timestamps)
-
-    
-    # sleap_interface = SLEAPInterface(file_path=slp_file_path)
-    # sleap_interface.set_aligned_timestamps()
-    # print(sleap_interface)
-    # # ConverterPipe
-    # test_on_temp_nwb_file(sleap_interface, nwb_path)
-
-
-
-# All of this maybe can go:
-"""
-if len(sys.argv) > 1:
-    main_path = Path(sys.argv[1])
-else:
-    main_path = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings")
-    print(f"No path provided, using example: {main_path}")
-
-if len(sys.argv) > 2:
-    config_path = Path(sys.argv[2])
-else:
-    config_path = Path("/Users/vigji/Desktop/cricket-below-Luigi Petrucco-2024-02-05/config.yaml")
-    print(f"No config path provided, using example: {config_path}")
-
-all_sessions = list(main_path.glob("M*_WT*/*/*")) 
-videos_to_process = [str(path) for path in main_path.glob("M*_WT*/*/*/videos/concatenated_central.mp4")]
-print(f"Found {len(videos_to_process)} videos to process")
-pprint(videos_to_process)
-
-if len(videos_to_process) > 0:
-    import deeplabcut
-    deeplabcut.analyze_videos(config_path, videos_to_process)
-"""
