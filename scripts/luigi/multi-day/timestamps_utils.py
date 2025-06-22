@@ -8,7 +8,7 @@ from nwb_conv import parse_folder_metadata
 from spikeinterface.extractors import read_openephys_event
 
 
-MIN_T_TO_SPLIT = 5
+MIN_T_TO_SPLIT = 4
 MIN_SEGMENT_LENGTH = 3000
 # %%
 
@@ -212,7 +212,7 @@ def get_video_timestamps(input_data_folder):
 # %%
 if __name__ == "__main__":
     #sample_folder = "/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144"    # sample_folder = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250513/103449"
-    sample_folder = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250511/164220"
+    sample_folder = "/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M31_WT002/20250510/121940"
     sample_folder = Path(sample_folder)
     session_triggers, actual_sessions = get_video_timestamps(sample_folder)
     print(actual_sessions)

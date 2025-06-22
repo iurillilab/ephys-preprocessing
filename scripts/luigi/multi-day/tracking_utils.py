@@ -100,7 +100,7 @@ if __name__ == "__main__":
     # data_path = Path('/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250509/113126')
     main_data_path = Path('/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings')
     data_paths = sorted(list(main_data_path.glob("M3*_WT*/*/[0-9][0-9][0-9][0-9][0-9][0-9]")))    
-    # data_paths = [Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250513/103449")]
+    data_paths = [Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M31_WT002/20250510/121940")]
     for data_path in data_paths:
         print(data_path)
         nwb_path = data_path / "tracking_output.nwb"
