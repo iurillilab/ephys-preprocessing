@@ -163,7 +163,7 @@ if  __name__ == "__main__":
     #example_path = '/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys _recordings/M29_WT002/20250508/155144'
     example_main_path = Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/")
     assert example_main_path.exists(), f"Folder {example_main_path} does not exist"
-    all_paths_to_test = sorted(list(example_main_path.glob("M3*_WT002/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/[0-9][0-9][0-9][0-9][0-9][0-9]")))
+    all_paths_to_test = sorted(list(example_main_path.glob("M31_WT002/[0-9][0-9][0-9][0-9][0-9][0-9]11/[0-9][0-9][0-9][0-9][0-9][0-9]")))
     pprint(all_paths_to_test)
     for example_path in all_paths_to_test:
         print("-"*100)
