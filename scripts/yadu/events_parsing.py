@@ -38,7 +38,7 @@ plt.figure()
 # plt.plot(np.diff(clock[:, 0]))
 plt.plot(np.diff(laser[:, 0]))
 # %%
-motor_log = pd.read_csv(parent_path/'Anaesthetised'/ 'M26_D879'/ '20250307' / '161450'/ 'motor-log_2025-03-07T16_14_50.csv')
+motor_log = pd.read_csv(parent_path/'Anaesthetised'/ 'M26_D879'/ '20250307' /'20250307' / '161450'/ 'motor-log_2025-03-07T16_14_50.csv')
 motor_log
 # motor_log.drop(0)
 # %%
@@ -48,7 +48,7 @@ motor_log
 # %%
 motor_log['timestamp_diff'] = pd.to_datetime(motor_log['Timestamp']).diff()
 print("Differences in 'Timestamp':")
-print(motor_log['timestamp_diff'])
+motor_log
 #%%
 plt.figure
 plt.plot(motor_log['timestamp_diff'])
@@ -75,7 +75,7 @@ plt.plot(events_with_label_1['label'], 'o')
 plt.plot(events_with_label_2['label'], 'o')
 plt.plot(events_with_label_4['label'], 'o')
 #%%
-len(events_with_label_4)# %%
+motor_log
 # %%
 motor_log = motor_log.drop("Value.Theta", axis=1)
 motor_log = motor_log.drop("timestamp_diff", axis=1)
@@ -85,32 +85,41 @@ NIDAQ_duration = events_with_label_4['duration']
 # %%
 motor_log['timestamp_NIDAQ'] = NIDAQ_time
 motor_log['duration_NIDAQ'] = NIDAQ_duration
-
+motor_log
 # %%
 motor_log['set_movement_on'] = motor_log['timestamp_NIDAQ']
 motor_log['set_movement_off'] = motor_log['timestamp_NIDAQ'] + motor_log['duration_NIDAQ']
-
-
+motor_log_before_drop = motor_log
+# motor_log = motor_log.drop(index=0)
+motor_log = motor_log.reset_index(drop=True)
+motor_log.drop(['Timestamp'], axis = 1)
+#%%
 # Filter rows where Value.Radius equals 5 and add the new columns:
 motor_log.loc[motor_log['Value.Radius'] == 5, 'home_movement_on'] = motor_log.loc[motor_log['Value.Radius'] == 5, 'timestamp_NIDAQ']
 motor_log.loc[motor_log['Value.Radius'] == 5, 'home_movement_off'] = motor_log.loc[motor_log['Value.Radius'] == 5, 'timestamp_NIDAQ'] + motor_log.loc[motor_log['Value.Radius'] == 5, 'duration_NIDAQ']
+motor_log
 #%%
-# motor_log = motor_log.drop(0)
-# motor_log = motor_log.drop('timestamp_diff_sec', axis=1)
-motor_log 
-# %%
-trial_log = motor_log[motor_log['Value.Radius'] != 5]
-trial_log = trial_log.drop(['timestamp_diff_sec', 'home_movement_on', 'home_movement_off'], axis=1)
-trial_log = trial_log.reset_index(drop=True)
-#%%
-home_movement = motor_log.loc[motor_log['Value.Radius'] == 5, ['home_movement_on', 'home_movement_off']]
-home_movement = home_movement.reset_index(drop=True)
+# Step 1: Find indices where Value.Radius == 5.0
+home_idx = motor_log.index[motor_log['Value.Radius'] == 5.0]
 
+# Step 2: Compute home_movement_on and home_movement_off for those rows
+home_on = motor_log.loc[home_idx, 'timestamp_NIDAQ']
+home_off = motor_log.loc[home_idx, 'timestamp_NIDAQ'] + motor_log.loc[home_idx, 'duration_NIDAQ']
+
+# Step 3: Assign to previous row (index - 1)
+motor_log.loc[home_idx - 1, 'home_movement_on'] = home_on.values
+motor_log.loc[home_idx - 1, 'home_movement_off'] = home_off.values
+
+# Step 4: Remove all rows where Value.Radius == 5.0
+motor_log = motor_log[motor_log['Value.Radius'] != 5.0].reset_index(drop=True)
+#%%
+# motor_log = motor_log.drop(['timestamp_diff_sec', 'Timestamp', 'timestamp_NIDAQ', 'duration_NIDAQ'], axis=1)
+motor_log
+motor_log['start_time'] = motor_log['set_movement_on']
+motor_log['stop_time'] = motor_log['home_movement_off']
+motor_log
+#%%
+trial_log = motor_log
+trial_log.to_csv(parent_path/'Anaesthetised'/ 'M26_D879' / '20250307' / 'trial_log.csv', index=False)
 # %%
-trial_log['home_movement_on'] = home_movement['home_movement_on']
-trial_log['home_movement_off'] = home_movement['home_movement_off']
-trial_log.drop(['Timestamp', 'timestamp_NIDAQ', 'duration_NIDAQ'], axis=1, inplace=True)
-# %%
-trial_log
-trial_log.to_csv(recording_path / 'trial_log.csv', index=False)
-# %%
+
