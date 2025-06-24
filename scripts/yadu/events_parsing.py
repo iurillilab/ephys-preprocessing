@@ -13,7 +13,6 @@ events_path = recording_path / 'Record Node 107' / 'experiment1' / 'recording1' 
 # Loading events
 # Extract events. aka digital signals:
 events = se.read_openephys_event(recording_path)
-
 events_array = events.get_events(channel_id='PXIe-6341Digital Input Line')
 events_array
 # %%
