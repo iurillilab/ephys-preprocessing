@@ -33,6 +33,7 @@ plt.show()
 # %%
 #trial parameters
 start_time = trials["start"]
+start_time_ts = nap.Ts(trials['start'])
 end_time = trials["end"]
 set_movement_on = trials["set_movement_on"]
 set_movement_off = trials["set_movement_off"]
@@ -43,4 +44,28 @@ theta = trials["theta"]
 #%%
 spikes_in_trials = spike_tsd.restrict(trials)
 spikes_in_trials
+# %%
+# 1. Compute peri-event spike rasters for all units
+peri = nap.compute_perievent(
+    tref = spike_tsd,
+    timestamps= start_time_ts[:10],
+    minmax = (-1, 2),
+    time_unit= "s"
+)
+#%%
+# 2. Plot the PSTH for all units
+peri.plot()
+plt.show()
+
+# Optionally, plot the raster as well
+peri.plot_raster()
+plt.show()
+# %%
+# Plot rasters for each unit in the TsGroup
+for unit, ts in peri.items():
+    plt.eventplot(ts.index, lineoffsets=unit, colors='black')
+plt.xlabel('Time (s) relative to event')
+plt.ylabel('Unit')
+plt.title('Peri-event raster (first 10 events)')
+plt.show()
 # %%
