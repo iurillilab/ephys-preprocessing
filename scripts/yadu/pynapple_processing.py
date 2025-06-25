@@ -37,6 +37,7 @@ start_time_ts = nap.Ts(trials['start'])
 end_time = trials["end"]
 set_movement_on = trials["set_movement_on"]
 set_movement_off = trials["set_movement_off"]
+set_move_ts = nap.Ts(trials["set_movement_off"])
 home_movement_on = trials["home_movement_on"]
 home_movement_off = trials["home_movement_off"]
 radius = trials["radius"]
@@ -45,21 +46,27 @@ theta = trials["theta"]
 spikes_in_trials = spike_tsd.restrict(trials)
 spikes_in_trials
 # %%
+set_move_ts = nap.Ts(trials["set_movement_off"])
 # 1. Compute peri-event spike rasters for all units
-peri = nap.compute_perievent(
-    tref = spike_tsd,
-    timestamps= start_time_ts[:10],
+peth=nap.compute_perievent(
+    tref =set_move_ts,
+    timestamps= spike_tsd,
     minmax = (-1, 2),
     time_unit= "s"
 )
 #%%
-# 2. Plot the PSTH for all units
-peri.plot()
-plt.show()
-
-# Optionally, plot the raster as well
-peri.plot_raster()
-plt.show()
+plt.figure(figsize=(10, 6))
+plt.subplot(211)
+plt.plot(np.mean(peth.count(0.01), 1) / 0.01, linewidth=3, color="red")
+plt.xlim(-0.1, 0.2)
+plt.ylabel("Rate (spikes/sec)")
+plt.axvline(0.0)
+plt.subplot(212)
+plt.plot(peth.to_tsd(), "|", markersize=20, color="red", mew=4)
+plt.xlabel("Time from stim (s)")
+plt.ylabel("Stimulus")
+plt.xlim(-0.1, 0.2)
+plt.axvline(0.0)
 # %%
 # Plot rasters for each unit in the TsGroup
 for unit, ts in peri.items():
