@@ -260,3 +260,66 @@ for i in range(len(radii)):
 plt.tight_layout()
 plt.show()
 # %%
+import numpy as np
+import matplotlib.pyplot as plt
+
+# unit_pval_df: rows=unit, columns=(radius, theta), values=p-value
+
+# Compute proportion of units with p < 0.05 for each (radius, theta)
+prop_matrix = np.full((len(radii), len(thetas)), np.nan)
+for i, r in enumerate(radii):
+    for j, t in enumerate(thetas):
+        col = (r, t)
+        if col in unit_pval_df.columns:
+            pvals = unit_pval_df[col].dropna()
+            if len(pvals) > 0:
+                prop_matrix[i, j] = np.mean(pvals < 0.05)
+
+plt.figure(figsize=(8, 6))
+im = plt.imshow(
+    prop_matrix,
+    aspect='auto',
+    origin='lower',
+    cmap='plasma',
+    vmin=0, vmax=1
+)
+plt.colorbar(im, label='Proportion of significant units (p < 0.05)')
+plt.xticks(np.arange(len(thetas)), [f"{t:.2f}" for t in thetas])
+plt.yticks(np.arange(len(radii)), [f"{r:.2f}" for r in radii])
+plt.xlabel('Theta')
+plt.ylabel('Radius')
+plt.title('Proportion of significant units per position')
+plt.tight_layout()
+plt.show()
+# %%
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Prepare grid
+nrows = len(radii)
+ncols = len(thetas)
+fig, axes = plt.subplots(nrows, ncols, figsize=(3*ncols, 2.5*nrows), sharex=True, sharey=True)
+
+for i, r in enumerate(radii):
+    for j, t in enumerate(thetas):
+        col = (r, t)
+        ax = axes[i, j] if nrows > 1 and ncols > 1 else axes[max(i, j)]
+        if col in unit_pval_df.columns:
+            pvals = unit_pval_df[col].dropna()
+            if len(pvals) > 0:
+                # Histogram bins
+                bins = np.linspace(0, 1, 21)
+                counts, edges = np.histogram(pvals, bins=bins)
+                # Highlight bars with p < 0.05
+                bar_colors = ['red' if edges[k] < 0.05 else 'gray' for k in range(len(counts))]
+                ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=bar_colors, edgecolor='black')
+        ax.set_title(f"r={r:.2f}, θ={t:.2f}")
+        if i == nrows - 1:
+            ax.set_xlabel("p-value")
+        if j == 0:
+            ax.set_ylabel("Number of units")
+        ax.set_xlim(0, 1)
+plt.tight_layout()
+plt.suptitle("P-value histograms for each (radius, theta) combination\n(red: p < 0.05)", y=1.02)
+plt.show()
+# %%
