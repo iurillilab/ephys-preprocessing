@@ -24,13 +24,16 @@ main_data_path = Path('/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PRE
 assert main_data_path.exists(), f"Main data path {main_data_path} does not exist"
 data_paths = sorted(list(main_data_path.glob("M*_WT*/*/[0-9][0-9][0-9][0-9][0-9][0-9]")))
 print(len(data_paths))
-data_paths = [f for f in data_paths if len(list(f.glob("[0-9][0-9][0-9][0-9][0-9][0-9].nwb"))) == 0]
+# data_paths = [f for f in data_paths if len(list(f.glob("[0-9][0-9][0-9][0-9][0-9][0-9].nwb"))) == 0]
 # data_paths = [Path("/Volumes/SystemsNeuroBiology/SNeuroBiology_shared/P07_PREY_HUNTING_YE/e01_ephys_recordings/M30_WT002/20250513/103449")]
 main_dest_folder = Path("/Users/vigji/Desktop/07_PREY_HUNTING_YE/e01_ephys_recordings")
 
+to_redo = sorted(list(main_data_path.glob("M*_WT*/*/[0-9][0-9][0-9][0-9][0-9][0-9]")))
+data_paths = [f for f in to_redo if len(list((f / "NPXData").glob("[0-9]*"))) > 1]
+
 if main_dest_folder is not None:
     main_dest_folder.mkdir(parents=True, exist_ok=True)
-print(len(data_paths))
+
 # %%
 for data_path in data_paths:
     #if "0508" in str(data_path) or "0509" in str(data_path):
@@ -40,9 +43,9 @@ for data_path in data_paths:
     try:
         data_folder = Path(data_path)
 
-        if (data_folder / f"{data_folder.name}.nwb").exists():
-            print(f"Skipping {data_folder} because it already exists")
-            continue
+        #if (data_folder / f"{data_folder.name}.nwb").exists():
+        #    print(f"Skipping {data_folder} because it already exists")
+        #    continue
 
         ########### Spikes ###########
         spikes_interface = spikes_interface_loder(data_folder)
@@ -67,7 +70,8 @@ for data_path in data_paths:
         # metadata = parse_folder_metadata(data_folder)
         # metadata = dict_deep_update(interface_metadata, metadata)
         if main_dest_folder is not None:
-            data = test_on_temp_nwb_file(interface, main_dest_folder / f"{data_folder.name}.nwb", 
+            print(main_dest_folder / data_folder.parent.parent.name / data_folder.parent.name / data_folder.name / f"{data_folder.name}.nwb")
+            data = test_on_temp_nwb_file(interface, main_dest_folder / data_folder.parent.parent.name / data_folder.parent.name / data_folder.name / f"{data_folder.name}.nwb", 
                                         conversion_options=conv_options)
         # else:
         #     dest_folder = data_folder
@@ -79,3 +83,4 @@ for data_path in data_paths:
         print(f"Error processing {data_folder}: {e}")
         continue
         
+# %%

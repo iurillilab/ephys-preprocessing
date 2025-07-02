@@ -129,6 +129,7 @@ def get_video_timestamps(input_data_folder):
     # TODO: right now this is a tangled mess, but we have to deal with many possible cases...
     if is_split:
         session_triggers = []
+        offset_t = 0
         for npx_data_folder in npx_data_folders:
             recs_parent_folder_list = list(
                 npx_data_folder.glob("Record Node */experiment*")
@@ -138,15 +139,17 @@ def get_video_timestamps(input_data_folder):
             print(recs_folder)
             if len(recs_folder) > 1:
                 print("Multiple recordings found for a single session, concatenating them")
-                triggers_array = np.concatenate([
+                to_append = np.concatenate([
                     get_timestamps_si(npx_data_folder, recording_number=n) for n in range(2)
                 ])
-                session_triggers.append(triggers_array) 
 
             else:
                 print("Single recording found for this session, good")
-                all_events = get_timestamps_si(npx_data_folder)
-                session_triggers.append(all_events)
+                to_append = get_timestamps_si(npx_data_folder)
+            
+            to_append += offset_t
+            offset_t = to_append[-1]
+            session_triggers.append(to_append)
     else:
         npx_data_folder = npx_data_folders[0]
         recs_parent_folder_list = list(
