@@ -253,8 +253,8 @@ for i in range(len(radii)):
             plt.text(
                 j, i, f"{val:.2g}",
                 ha='center', va='center',
-                color='white' if val < 0.05 else 'black',
-                fontsize=8, fontweight='bold' if val < 0.05 else 'normal'
+                color='white' if val < 0.01 else 'black',
+                fontsize=8, fontweight='bold' if val < 0.01 else 'normal'
             )
 
 plt.tight_layout()
@@ -273,7 +273,7 @@ for i, r in enumerate(radii):
         if col in unit_pval_df.columns:
             pvals = unit_pval_df[col].dropna()
             if len(pvals) > 0:
-                prop_matrix[i, j] = np.mean(pvals < 0.05)
+                prop_matrix[i, j] = np.mean(pvals < 0.01)
 
 plt.figure(figsize=(8, 6))
 im = plt.imshow(
@@ -292,6 +292,38 @@ plt.title('Proportion of significant units per position')
 plt.tight_layout()
 plt.show()
 # %%
+# Plotting p-value histograms for each (radius, theta) combination
+
+# Prepare grid
+nrows = len(radii)
+ncols = len(thetas)
+fig, axes = plt.subplots(nrows, ncols, figsize=(3*ncols, 2.5*nrows), sharex=True, sharey=True)
+
+for i, r in enumerate(radii):
+    for j, t in enumerate(thetas):
+        col = (r, t)
+        ax = axes[i, j] if nrows > 1 and ncols > 1 else axes[max(i, j)]
+        if col in unit_pval_df.columns:
+            pvals = unit_pval_df[col].dropna()
+            if len(pvals) > 0:
+                # Histogram bins
+                bins = np.linspace(0, 1, 51)
+                counts, edges = np.histogram(pvals, bins=bins)
+                # Highlight bars with p < 0.05
+                bar_colors = ['red' if edges[k] < 0.01 else 'gray' for k in range(len(counts))]
+                ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=bar_colors, edgecolor='black')
+                print("p-values < 0.01:", len(pvals[pvals < 0.01].values))
+        ax.set_title(f"r={r:.2f}, θ={t:.2f}")
+        if i == nrows - 1:
+            ax.set_xlabel("p-value")
+        if j == 0:
+            ax.set_ylabel("Number of units")
+        ax.set_xlim(0, 0.5)
+plt.tight_layout()
+plt.suptitle("P-value histograms for each (radius, theta) combination\n(red: p < 0.01)", y=1.02)
+# plt.show()
+# %%
+# Plotting -log10(p) histograms for each (radius, theta) combination
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -307,19 +339,21 @@ for i, r in enumerate(radii):
         if col in unit_pval_df.columns:
             pvals = unit_pval_df[col].dropna()
             if len(pvals) > 0:
-                # Histogram bins
-                bins = np.linspace(0, 1, 21)
-                counts, edges = np.histogram(pvals, bins=bins)
-                # Highlight bars with p < 0.05
-                bar_colors = ['red' if edges[k] < 0.05 else 'gray' for k in range(len(counts))]
+                pvals = np.clip(pvals, 1e-20, 1)
+                logp = -np.log10(pvals)
+                bins = np.linspace(0, 10, 21)
+                counts, edges = np.histogram(logp, bins=bins)
+                # Highlight bars with -log10(p) > 2 (p < 0.01)
+                bar_colors = ['red' if (edges[k] + edges[k+1]) / 2 > 2 else 'gray' for k in range(len(counts))]
                 ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=bar_colors, edgecolor='black')
+                ax.axvline(2, color='blue', linestyle='--', linewidth=1)
         ax.set_title(f"r={r:.2f}, θ={t:.2f}")
         if i == nrows - 1:
-            ax.set_xlabel("p-value")
+            ax.set_xlabel("-log10(p-value)")
         if j == 0:
             ax.set_ylabel("Number of units")
-        ax.set_xlim(0, 1)
+        ax.set_xlim(0, 10)
 plt.tight_layout()
-plt.suptitle("P-value histograms for each (radius, theta) combination\n(red: p < 0.05)", y=1.02)
+plt.suptitle("-log10(p) histograms for each (radius, theta) combination\n(red: p < 0.01)", y=1.02)
 plt.show()
 # %%
