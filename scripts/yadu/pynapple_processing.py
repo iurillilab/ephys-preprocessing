@@ -5,6 +5,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import pynapple as nap
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+from scipy.stats import ttest_1samp
 # %%
 parent_path = Path(r'Y:/Anaesthetised')
 nwbfile_path = parent_path / 'M26_D879' / '20250307' / 'M26_D879.nwb'
@@ -172,10 +178,6 @@ delta_df.columns = pd.MultiIndex.from_tuples(delta_df.columns, names=["radius", 
 print(delta_df)
 #%%
 # Perform a t-test for each unit and position to see if the delta firing rate is significantly different from zero
-from scipy.stats import ttest_1samp
-import numpy as np
-import pandas as pd
-
 # Prepare a DataFrame to store p-values for each unit and (radius, theta)
 unit_pval_map = {}
 
@@ -260,10 +262,10 @@ for i in range(len(radii)):
 plt.tight_layout()
 plt.show()
 # %%
-import numpy as np
-import matplotlib.pyplot as plt
-
 # unit_pval_df: rows=unit, columns=(radius, theta), values=p-value
+radii = sorted(set([r for r, t in unit_pval_df.columns]))
+thetas = sorted(set([t for r, t in unit_pval_df.columns]))
+pval_matrix = np.full((len(radii), len(thetas)), np.nan)
 
 # Compute proportion of units with p < 0.05 for each (radius, theta)
 prop_matrix = np.full((len(radii), len(thetas)), np.nan)
@@ -324,8 +326,9 @@ plt.suptitle("P-value histograms for each (radius, theta) combination\n(red: p <
 # plt.show()
 # %%
 # Plotting -log10(p) histograms for each (radius, theta) combination
-import matplotlib.pyplot as plt
-import numpy as np
+radii = sorted(set([r for r, t in unit_pval_df.columns]))
+thetas = sorted(set([t for r, t in unit_pval_df.columns]))
+pval_matrix = np.full((len(radii), len(thetas)), np.nan)
 
 # Prepare grid
 nrows = len(radii)
@@ -341,19 +344,295 @@ for i, r in enumerate(radii):
             if len(pvals) > 0:
                 pvals = np.clip(pvals, 1e-20, 1)
                 logp = -np.log10(pvals)
-                bins = np.linspace(0, 10, 21)
+                bins = np.linspace(0, 10, 100)
                 counts, edges = np.histogram(logp, bins=bins)
                 # Highlight bars with -log10(p) > 2 (p < 0.01)
                 bar_colors = ['red' if (edges[k] + edges[k+1]) / 2 > 2 else 'gray' for k in range(len(counts))]
                 ax.bar(edges[:-1], counts, width=np.diff(edges), align='edge', color=bar_colors, edgecolor='black')
                 ax.axvline(2, color='blue', linestyle='--', linewidth=1)
+                # Count and annotate number of significant neurons
+                n_sig = np.sum(pvals < 0.01)
+                ax.text(
+                    0.98, 0.95, f"n={n_sig}", 
+                    ha='right', va='top', transform=ax.transAxes,
+                    fontsize=10, color='red', fontweight='bold'
+                )
         ax.set_title(f"r={r:.2f}, θ={t:.2f}")
         if i == nrows - 1:
             ax.set_xlabel("-log10(p-value)")
         if j == 0:
             ax.set_ylabel("Number of units")
-        ax.set_xlim(0, 10)
+        ax.set_xlim(0, 5)
 plt.tight_layout()
 plt.suptitle("-log10(p) histograms for each (radius, theta) combination\n(red: p < 0.01)", y=1.02)
 plt.show()
+#%%
+# 1. Select units with p < 0.05 in at least one (radius, theta)
+sig_units = unit_pval_df.index[(unit_pval_df < 0.05).any(axis=1)]
+
+# 2. Build feature matrix X from delta_df for significant units
+# delta_df: rows=unit, columns=(radius, theta)
+# We want X: (n_trials, n_units)
+# For each trial, get the delta firing rate for the corresponding (radius, theta) for each unit
+
+# Build X: (n_trials, n_units), each entry is the delta firing rate for that trial and unit
+n_trials = len(trials)
+n_units = len(sig_units)
+X = np.zeros((n_trials, n_units))
+
+for i, unit in enumerate(sig_units):
+    unit_spikes = spike_tsd[spike_tsd.values == unit]
+    for j, (s, e) in enumerate(zip(trials['start'], trials['end'])):
+        duration = e - s
+        if duration > 0:
+            # Firing rate after (during trial)
+            count_after = np.sum((unit_spikes.index >= s) & (unit_spikes.index < e))
+            rate_after = count_after / duration
+            # Firing rate before (same duration before trial)
+            before_start = s - duration
+            before_end = s
+            count_before = np.sum((unit_spikes.index >= before_start) & (unit_spikes.index < before_end))
+            rate_before = count_before / duration
+            # Delta firing rate for this trial
+            X[j, i] = rate_after - rate_before
+        else:
+            X[j, i] = 0
+
+# Targets: (radius, theta) for each trial
+y_radius = np.array(trials['radius']).astype(int)
+y_theta = np.array(trials['theta']).astype(int)
+y_pair = pd.Categorical(list(zip(y_radius, y_theta))).codes
+
+# Use a single split for all targets
+X_train, X_test, y_radius_train, y_radius_test, y_theta_train, y_theta_test, y_pair_train, y_pair_test = train_test_split(
+    X, y_radius, y_theta, y_pair, test_size=0.2, random_state=42
+)
+
+# Now fit and evaluate as before
+clf_radius = RandomForestClassifier()
+clf_radius.fit(X_train, y_radius_train)
+radius_pred = clf_radius.predict(X_test)
+print("Radius accuracy:", accuracy_score(y_radius_test, radius_pred))
+
+clf_theta = RandomForestClassifier()
+clf_theta.fit(X_train, y_theta_train)
+theta_pred = clf_theta.predict(X_test)
+print("Theta accuracy:", accuracy_score(y_theta_test, theta_pred))
+
+clf_pair = RandomForestClassifier()
+clf_pair.fit(X_train, y_pair_train)
+pair_pred = clf_pair.predict(X_test)
+print("Radius,Theta pair accuracy:", accuracy_score(y_pair_test, pair_pred))
+
+#%%
+print("Unique rows in X:", np.unique(X, axis=0).shape[0])
+print("Number of trials:", X.shape[0])
+# %%
+# 1. Scatter plot: True vs Predicted for radius and theta
+fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+
+# Radius
+axs[0].scatter(y_radius_test, radius_pred, alpha=0.7)
+axs[0].plot([min(y_radius_test), max(y_radius_test)], [min(y_radius_test), max(y_radius_test)], 'r--')
+axs[0].set_xlabel('True Radius')
+axs[0].set_ylabel('Predicted Radius')
+axs[0].set_title('True vs Predicted Radius')
+
+# Theta
+axs[1].scatter(y_theta_test, theta_pred, alpha=0.7)
+axs[1].plot([min(y_theta_test), max(y_theta_test)], [min(y_theta_test), max(y_theta_test)], 'r--')
+axs[1].set_xlabel('True Theta')
+axs[1].set_ylabel('Predicted Theta')
+axs[1].set_title('True vs Predicted Theta')
+
+plt.tight_layout()
+plt.show()
+
+# 2. Confusion matrix for (radius, theta) pair
+cm = confusion_matrix(y_pair_test, pair_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+plt.xlabel('Predicted (radius, theta) class')
+plt.ylabel('True (radius, theta) class')
+plt.title('Confusion Matrix for (radius, theta) Pair Classification')
+plt.tight_layout()
+plt.show()
+# %%
+from sklearn.svm import SVC
+
+# SVM for radius
+svm_radius = SVC()
+svm_radius.fit(X_train, y_radius_train)
+radius_pred_svm = svm_radius.predict(X_test)
+print("SVM Radius accuracy:", accuracy_score(y_radius_test, radius_pred_svm))
+
+# SVM for theta
+svm_theta = SVC()
+svm_theta.fit(X_train, y_theta_train)
+theta_pred_svm = svm_theta.predict(X_test)
+print("SVM Theta accuracy:", accuracy_score(y_theta_test, theta_pred_svm))
+
+# SVM for (radius, theta) pair
+svm_pair = SVC()
+svm_pair.fit(X_train, y_pair_train)
+pair_pred_svm = svm_pair.predict(X_test)
+print("SVM Radius,Theta pair accuracy:", accuracy_score(y_pair_test, pair_pred_svm))
+# %%
+# 1. Scatter plot: True vs Predicted for radius and theta (SVM)
+fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+
+# Radius
+axs[0].scatter(y_radius_test, radius_pred_svm, alpha=0.7)
+axs[0].plot([min(y_radius_test), max(y_radius_test)], [min(y_radius_test), max(y_radius_test)], 'r--')
+axs[0].set_xlabel('True Radius')
+axs[0].set_ylabel('Predicted Radius (SVM)')
+axs[0].set_title('SVM: True vs Predicted Radius')
+
+# Theta
+axs[1].scatter(y_theta_test, theta_pred_svm, alpha=0.7)
+axs[1].plot([min(y_theta_test), max(y_theta_test)], [min(y_theta_test), max(y_theta_test)], 'r--')
+axs[1].set_xlabel('True Theta')
+axs[1].set_ylabel('Predicted Theta (SVM)')
+axs[1].set_title('SVM: True vs Predicted Theta')
+
+plt.tight_layout()
+plt.show()
+
+# 2. Confusion matrix for (radius, theta) pair (SVM)
+cm_svm = confusion_matrix(y_pair_test, pair_pred_svm)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm_svm, annot=True, fmt='d', cmap='Blues')
+plt.xlabel('Predicted (radius, theta) class (SVM)')
+plt.ylabel('True (radius, theta) class')
+plt.title('SVM: Confusion Matrix for (radius, theta) Pair Classification')
+plt.tight_layout()
+plt.show()
+# %%
+from sklearn.model_selection import GridSearchCV
+
+# Define parameter grid for SVM
+param_grid = {
+    'C': [0.1, 1, 10, 100],
+    'kernel': ['linear', 'rbf', 'poly'],
+    'gamma': ['scale', 'auto']
+}
+
+# Grid search for radius
+svm_radius = SVC()
+grid_radius = GridSearchCV(svm_radius, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_radius.fit(X_train, y_radius_train)
+print("Best SVM params for radius:", grid_radius.best_params_)
+radius_pred_svm = grid_radius.predict(X_test)
+print("Best SVM Radius accuracy:", accuracy_score(y_radius_test, radius_pred_svm))
+
+# Grid search for theta
+svm_theta = SVC()
+grid_theta = GridSearchCV(svm_theta, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_theta.fit(X_train, y_theta_train)
+print("Best SVM params for theta:", grid_theta.best_params_)
+theta_pred_svm = grid_theta.predict(X_test)
+print("Best SVM Theta accuracy:", accuracy_score(y_theta_test, theta_pred_svm))
+
+# Grid search for (radius, theta) pair
+svm_pair = SVC()
+grid_pair = GridSearchCV(svm_pair, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_pair.fit(X_train, y_pair_train)
+print("Best SVM params for (radius, theta) pair:", grid_pair.best_params_)
+pair_pred_svm = grid_pair.predict(X_test)
+print("Best SVM Radius,Theta pair accuracy:", accuracy_score(y_pair_test, pair_pred_svm))
+# %%
+from sklearn.model_selection import GridSearchCV
+
+# Define parameter grid for Random Forest
+rf_param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 5, 10, 20],
+    'min_samples_split': [2, 5, 10],
+    'max_features': ['sqrt', 'log2', None]
+}
+
+# Grid search for radius
+rf_radius = RandomForestClassifier(random_state=42)
+grid_rf_radius = GridSearchCV(rf_radius, rf_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_rf_radius.fit(X_train, y_radius_train)
+print("Best RF params for radius:", grid_rf_radius.best_params_)
+radius_pred_rf = grid_rf_radius.predict(X_test)
+print("Best RF Radius accuracy:", accuracy_score(y_radius_test, radius_pred_rf))
+
+# Grid search for theta
+rf_theta = RandomForestClassifier(random_state=42)
+grid_rf_theta = GridSearchCV(rf_theta, rf_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_rf_theta.fit(X_train, y_theta_train)
+print("Best RF params for theta:", grid_rf_theta.best_params_)
+theta_pred_rf = grid_rf_theta.predict(X_test)
+print("Best RF Theta accuracy:", accuracy_score(y_theta_test, theta_pred_rf))
+
+# Grid search for (radius, theta) pair
+rf_pair = RandomForestClassifier(random_state=42)
+grid_rf_pair = GridSearchCV(rf_pair, rf_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+grid_rf_pair.fit(X_train, y_pair_train)
+print("Best RF params for (radius, theta) pair:", grid_rf_pair.best_params_)
+pair_pred_rf = grid_rf_pair.predict(X_test)
+print("Best RF Radius,Theta pair accuracy:", accuracy_score(y_pair_test, pair_pred_rf))
+# %%
+#Accuracy for radius, theta, and (radius, theta) pair using Random Forest with Grid Search
+from sklearn.model_selection import StratifiedShuffleSplit, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+import numpy as np
+
+n_splits = 10
+test_size = 0.2
+
+rf_param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 5, 10, 20],
+    'min_samples_split': [2, 5, 10],
+    'max_features': ['sqrt', 'log2', None]
+}
+
+# For radius
+sss_radius = StratifiedShuffleSplit(n_splits=n_splits, test_size=test_size, random_state=42)
+radius_accuracies = []
+for train_idx, test_idx in sss_radius.split(X, y_radius):
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y_radius[train_idx], y_radius[test_idx]
+    grid = GridSearchCV(RandomForestClassifier(random_state=42), rf_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+    grid.fit(X_train, y_train)
+    y_pred = grid.best_estimator_.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    radius_accuracies.append(acc)
+    print(f"Radius: Best params: {grid.best_params_}, Test accuracy: {acc:.3f}")
+
+print(f"\nMean test accuracy for radius: {np.mean(radius_accuracies):.3f} ± {np.std(radius_accuracies):.3f}\n")
+
+# For theta
+sss_theta = StratifiedShuffleSplit(n_splits=n_splits, test_size=test_size, random_state=42)
+theta_accuracies = []
+for train_idx, test_idx in sss_theta.split(X, y_theta):
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y_theta[train_idx], y_theta[test_idx]
+    grid = GridSearchCV(RandomForestClassifier(random_state=42), rf_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+    grid.fit(X_train, y_train)
+    y_pred = grid.best_estimator_.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    theta_accuracies.append(acc)
+    print(f"Theta: Best params: {grid.best_params_}, Test accuracy: {acc:.3f}")
+
+print(f"\nMean test accuracy for theta: {np.mean(theta_accuracies):.3f} ± {np.std(theta_accuracies):.3f}\n")
+
+# For (radius, theta) pair
+sss_pair = StratifiedShuffleSplit(n_splits=n_splits, test_size=test_size, random_state=42)
+pair_accuracies = []
+for train_idx, test_idx in sss_pair.split(X, y_pair):
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y_pair[train_idx], y_pair[test_idx]
+    grid = GridSearchCV(RandomForestClassifier(random_state=42), rf_param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+    grid.fit(X_train, y_train)
+    y_pred = grid.best_estimator_.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    pair_accuracies.append(acc)
+    print(f"Pair: Best params: {grid.best_params_}, Test accuracy: {acc:.3f}")
+
+print(f"\nMean test accuracy for (radius, theta) pair: {np.mean(pair_accuracies):.3f} ± {np.std(pair_accuracies):.3f}")
 # %%
