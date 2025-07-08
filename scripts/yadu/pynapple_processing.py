@@ -66,7 +66,7 @@ plt.figure(figsize=(10, 6))
 for i, unit in enumerate(unit_ids):
     unit_spikes = spike_tsd[spike_tsd.values == unit]
     aligned_spikes = unit_spikes.index - event_time
-    mask = (aligned_spikes >= -0.5) & (aligned_spikes <= 0.5)
+    mask = (aligned_spikes >= -10) & (aligned_spikes <= 10)
     plt.plot(aligned_spikes[mask], np.full(np.sum(mask), unit), '|', markersize=5, color='black')
 
 plt.xlabel("Time from event (s)")
@@ -75,49 +75,236 @@ plt.title("Spikes for all units aligned to single event")
 plt.xlim(-0.5, 0.5)
 plt.axvline(0.0, color='blue')
 plt.show()
-# %%
+#%%
+#average firing rate for neurons around trials in a 10s window with 100ms bins
+# Parameters
+window = 10  # seconds before and after
+bin_size = 0.1  # 100 ms
+bins = np.arange(-window, window + bin_size, bin_size)
+bin_centers = bins[:-1] + bin_size / 2
+
+unit_ids = np.unique(spike_tsd.values)
+n_units = len(unit_ids)
+n_bins = len(bins) - 1
+
+# Initialize: rows=units, cols=bins
+fr_matrix = np.zeros((n_units, n_bins))
+
+for i, unit in enumerate(unit_ids):
+    unit_spikes = spike_tsd[spike_tsd.values == unit].index.values
+    aligned_counts = np.zeros(n_bins)
+    n_trials = 0
+    for s in start_time:
+        # Align spikes to trial start
+        aligned_spikes = unit_spikes - s
+        # Only keep spikes within window
+        mask = (aligned_spikes >= -window) & (aligned_spikes <= window)
+        aligned_spikes = aligned_spikes[mask]
+        # Histogram
+        counts, _ = np.histogram(aligned_spikes, bins=bins)
+        aligned_counts += counts
+        n_trials += 1
+    # Average firing rate per bin (Hz)
+    fr_matrix[i, :] = aligned_counts / (n_trials * bin_size)
+
+# Plot: average across all units
+mean_fr = np.mean(fr_matrix, axis=0)
+sem_fr = np.std(fr_matrix, axis=0) / np.sqrt(n_units)
+
+plt.figure(figsize=(10, 6))
+plt.plot(bin_centers, mean_fr, label='Mean firing rate')
+plt.fill_between(bin_centers, mean_fr - sem_fr, mean_fr + sem_fr, alpha=0.3, label='SEM')
+plt.axvline(0, color='red', linestyle='--', label='Trial start')
+plt.xlabel('Time from trial start (s)')
+plt.ylabel('Firing rate (Hz)')
+plt.title('Average firing rate around trial start (all units)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+#%%
+#average firing rate for neurons around each events, 2 seconds before and after the event in a 100ms bin
+
+window = 2  # seconds before and after
+bin_size = 0.1  # 100 ms
+bins = np.arange(-window, window + bin_size, bin_size)
+bin_centers = bins[:-1] + bin_size / 2
+
+event_dict = {
+    "set_movement_on": set_movement_on,
+    "set_movement_off": set_movement_off,
+    "home_movement_on": home_movement_on,
+    "home_movement_off": home_movement_off
+}
+
+unit_ids = np.unique(spike_tsd.values)
+n_units = len(unit_ids)
+n_bins = len(bins) - 1
+
+fig, axs = plt.subplots(2, 2, figsize=(14, 10), sharex=True, sharey=True)
+axs = axs.flatten()
+
+for idx, (event_name, event_times) in enumerate(event_dict.items()):
+    fr_matrix = np.zeros((n_units, n_bins))
+    for i, unit in enumerate(unit_ids):
+        unit_spikes = spike_tsd[spike_tsd.values == unit].index.values
+        aligned_counts = np.zeros(n_bins)
+        n_events = 0
+        for s in event_times:
+            aligned_spikes = unit_spikes - s
+            mask = (aligned_spikes >= -window) & (aligned_spikes <= window)
+            aligned_spikes = aligned_spikes[mask]
+            counts, _ = np.histogram(aligned_spikes, bins=bins)
+            aligned_counts += counts
+            n_events += 1
+        if n_events > 0:
+            fr_matrix[i, :] = aligned_counts / (n_events * bin_size)
+    mean_fr = np.mean(fr_matrix, axis=0)
+    sem_fr = np.std(fr_matrix, axis=0) / np.sqrt(n_units)
+    axs[idx].plot(bin_centers, mean_fr, label='Mean firing rate')
+    axs[idx].fill_between(bin_centers, mean_fr - sem_fr, mean_fr + sem_fr, alpha=0.3, label='SEM')
+    axs[idx].axvline(0, color='red', linestyle='--', label='Event')
+    axs[idx].set_title(event_name)
+    axs[idx].set_xlabel('Time from event (s)')
+    axs[idx].set_ylabel('Firing rate (Hz)')
+    axs[idx].legend()
+
+plt.suptitle('Average firing rate around each event (all units)')
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.show()
+#%%
+#z-score and make a tuning map for each neuron and position
+
+from scipy.stats import zscore
+
 unit_ids = np.unique(spike_tsd.values)
 positions = list(set(zip(radius, theta)))  # unique (radius, theta) pairs
 
-# Prepare a DataFrame to store the tuning map for each neuron
-tuning_maps = {}
+# --- 1s window centered on start time ---
+all_firing_rates_start = {unit: [] for unit in unit_ids}
+trial_info_start = {unit: [] for unit in unit_ids}
 
 for unit in unit_ids:
-    tuning_map = {}
     unit_spikes = spike_tsd[spike_tsd.values == unit]
     for pos in positions:
         r, t = pos
-        # Find trials with this (radius, theta)
         trial_mask = (radius == r) & (theta == t)
         trial_starts = np.array(start_time)[trial_mask]
-        trial_ends = np.array(end_time)[trial_mask]
-        firing_rates = []
-        for s, e in zip(trial_starts, trial_ends):
-            # Count spikes in this trial for this unit
-            count = np.sum((unit_spikes.index >= s) & (unit_spikes.index < e))
-            duration = e - s  # bin size in seconds
+        for s in trial_starts:
+            win_start = s - 0.5
+            win_end = s + 0.5
+            duration = win_end - win_start
             if duration > 0:
-                firing_rates.append(count / duration)
-        # Average firing rate for this position
-        if len(firing_rates) > 0:
-            tuning_map[pos] = np.mean(firing_rates)
-        else:
-            tuning_map[pos] = np.nan  # or 0
-    tuning_maps[unit] = tuning_map
+                count = np.sum((unit_spikes.index >= win_start) & (unit_spikes.index < win_end))
+                rate = count / duration
+                all_firing_rates_start[unit].append(rate)
+                trial_info_start[unit].append(pos)
 
-# Convert to DataFrame: rows=unit, columns=(radius, theta), values=mean firing rate (Hz)
-tuning_df = pd.DataFrame(tuning_maps).T
-tuning_df.index.name = "unit_id"
-tuning_df.columns = pd.MultiIndex.from_tuples(tuning_df.columns, names=["radius", "theta"])
-print(tuning_df)
+zscore_maps_start = {}
+for unit in unit_ids:
+    rates = np.array(all_firing_rates_start[unit])
+    if len(rates) > 1:
+        zscores = zscore(rates)
+    else:
+        zscores = np.zeros_like(rates)
+    tuning_map = {}
+    for pos, z in zip(trial_info_start[unit], zscores):
+        if pos not in tuning_map:
+            tuning_map[pos] = []
+        tuning_map[pos].append(z)
+    for pos in tuning_map:
+        tuning_map[pos] = np.mean(tuning_map[pos])
+    zscore_maps_start[unit] = tuning_map
+
+tuning_df_start = pd.DataFrame(zscore_maps_start).T
+tuning_df_start.index.name = "unit_id"
+tuning_df_start.columns = pd.MultiIndex.from_tuples(tuning_df_start.columns, names=["radius", "theta"])
+
+# --- 1s window centered on end time ---
+all_firing_rates_end = {unit: [] for unit in unit_ids}
+trial_info_end = {unit: [] for unit in unit_ids}
+
+for unit in unit_ids:
+    unit_spikes = spike_tsd[spike_tsd.values == unit]
+    for pos in positions:
+        r, t = pos
+        trial_mask = (radius == r) & (theta == t)
+        trial_ends = np.array(end_time)[trial_mask]
+        for e in trial_ends:
+            win_start = e - 0.5
+            win_end = e + 0.5
+            duration = win_end - win_start
+            if duration > 0:
+                count = np.sum((unit_spikes.index >= win_start) & (unit_spikes.index < win_end))
+                rate = count / duration
+                all_firing_rates_end[unit].append(rate)
+                trial_info_end[unit].append(pos)
+
+zscore_maps_end = {}
+for unit in unit_ids:
+    rates = np.array(all_firing_rates_end[unit])
+    if len(rates) > 1:
+        zscores = zscore(rates)
+    else:
+        zscores = np.zeros_like(rates)
+    tuning_map = {}
+    for pos, z in zip(trial_info_end[unit], zscores):
+        if pos not in tuning_map:
+            tuning_map[pos] = []
+        tuning_map[pos].append(z)
+    for pos in tuning_map:
+        tuning_map[pos] = np.mean(tuning_map[pos])
+    zscore_maps_end[unit] = tuning_map
+
+tuning_df_end = pd.DataFrame(zscore_maps_end).T
+tuning_df_end.index.name = "unit_id"
+tuning_df_end.columns = pd.MultiIndex.from_tuples(tuning_df_end.columns, names=["radius", "theta"])
+
+print("Tuning matrix around start time:\n", tuning_df_start)
+print("Tuning matrix around end time:\n", tuning_df_end)
+#%%
+#tuning map before Z-score
+# unit_ids = np.unique(spike_tsd.values)
+# positions = list(set(zip(radius, theta)))  # unique (radius, theta) pairs
+
+# # Prepare a DataFrame to store the tuning map for each neuron
+# tuning_maps = {}
+
+# for unit in unit_ids:
+#     tuning_map = {}
+#     unit_spikes = spike_tsd[spike_tsd.values == unit]
+#     for pos in positions:
+#         r, t = pos
+#         # Find trials with this (radius, theta)
+#         trial_mask = (radius == r) & (theta == t)
+#         trial_starts = np.array(start_time)[trial_mask]
+#         trial_ends = np.array(end_time)[trial_mask]
+#         firing_rates = []
+#         for s, e in zip(trial_starts, trial_ends):
+#             # Count spikes in this trial for this unit
+#             count = np.sum((unit_spikes.index >= s) & (unit_spikes.index < e))
+#             duration = e - s  # bin size in seconds
+#             if duration > 0:
+#                 firing_rates.append(count / duration)
+#         # Average firing rate for this position
+#         if len(firing_rates) > 0:
+#             tuning_map[pos] = np.mean(firing_rates)
+#         else:
+#             tuning_map[pos] = np.nan  # or 0
+#     tuning_maps[unit] = tuning_map
+
+# # Convert to DataFrame: rows=unit, columns=(radius, theta), values=mean firing rate (Hz)
+# tuning_df = pd.DataFrame(tuning_maps).T
+# tuning_df.index.name = "unit_id"
+# tuning_df.columns = pd.MultiIndex.from_tuples(tuning_df.columns, names=["radius", "theta"])
+# print(tuning_df)
 # %%# Plotting the tuning map for a specific neuron
 # Pick a neuron to show (e.g., the first one)
-unit = tuning_df.index[700]
-tuning = tuning_df.loc[unit]
+unit = tuning_df_start.index[93]
+tuning = tuning_df_start.loc[unit]
 
 # Convert MultiIndex columns to a matrix for plotting
-radii = sorted(set([r for r, t in tuning_df.columns]))
-thetas = sorted(set([t for r, t in tuning_df.columns]))
+radii = sorted(set([r for r, t in tuning_df_start.columns]))
+thetas = sorted(set([t for r, t in tuning_df_start.columns]))
 tuning_matrix = np.full((len(radii), len(thetas)), np.nan)
 
 for i, r in enumerate(radii):
@@ -215,7 +402,60 @@ unit_pval_df = pd.DataFrame(unit_pval_map).T
 unit_pval_df.index.name = "unit_id"
 unit_pval_df.columns = pd.MultiIndex.from_tuples(unit_pval_df.columns, names=["radius", "theta"])
 print(unit_pval_df)
-# %%
+#%%
+# Plotting the firing rate map for a specific neuron (gradient visualization)
+
+from scipy.ndimage import gaussian_filter
+
+# Pick a neuron to show (e.g., the 93rd one)
+unit = tuning_df.index[100]  # or tuning_df_z for z-scored
+tuning = tuning_df.loc[unit]  # or tuning_df_z.loc[unit]
+
+# Prepare the matrix for plotting
+radii = sorted(set([r for r, t in tuning_df.columns]))
+thetas = sorted(set([t for r, t in tuning_df.columns]))
+tuning_matrix = np.full((len(radii), len(thetas)), np.nan)
+
+for i, r in enumerate(radii):
+    for j, t in enumerate(thetas):
+        if (r, t) in tuning:
+            tuning_matrix[i, j] = tuning[(r, t)]
+
+# Smooth the matrix for better gradients
+sigma = 1.0  # Increase for more smoothing if needed
+tuning_matrix_smooth = gaussian_filter(tuning_matrix, sigma=sigma, mode='nearest')
+
+plt.figure(figsize=(8, 6))
+im = plt.imshow(
+    tuning_matrix_smooth,
+    aspect='auto',
+    origin='lower',
+    cmap='turbo',  # vibrant, multi-color gradient
+    vmin=np.nanmin(tuning_matrix_smooth),
+    vmax=np.nanmax(tuning_matrix_smooth)
+)
+plt.colorbar(im, label='Firing rate (Hz)' if tuning_df is not tuning_df_z else 'Z-scored firing rate')
+plt.xticks(np.arange(len(thetas)), [f"{t:.2f}" for t in thetas])
+plt.yticks(np.arange(len(radii)), [f"{r:.2f}" for r in radii])
+plt.xlabel('Theta')
+plt.ylabel('Radius')
+plt.title(f'Firing rate map for unit {unit}')
+
+# Optionally, overlay the original (unsmoothed) values as text
+for i in range(len(radii)):
+    for j in range(len(thetas)):
+        val = tuning_matrix[i, j]
+        if not np.isnan(val):
+            plt.text(
+                j, i, f"{val:.2g}",
+                ha='center', va='center',
+                color='white' if val > np.nanmean(tuning_matrix) else 'black',
+                fontsize=8, fontweight='bold' if val > np.nanmean(tuning_matrix) else 'normal'
+            )
+
+plt.tight_layout()
+plt.show()
+#%%
 # Plotting the p-value map for a specific neuron
 # Pick a unit to show (e.g., the first one)
 unit = unit_pval_df.index[93]
